@@ -136,10 +136,12 @@ export function PaymentModal({ isOpen, onClose, onSuccess, exchangeRate, directP
       };
 
       const result = await paymentPointService.createVirtualAccount(
-        user!.id,
-        user!.email || '',
-        profileData.name,
-        profileData.phone
+        {
+          userId: user!.id,
+          customerEmail: user!.email || '',
+          customerName: profileData.name,
+          customerPhone: profileData.phone
+        }
       );
       
       // Use the account from the result
