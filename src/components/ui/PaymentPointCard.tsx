@@ -93,7 +93,7 @@ export const PaymentPointCard: React.FC<PaymentPointCardProps> = ({ className })
     e.preventDefault();
     
     if (!user) {
-      error('Authentication Required', 'Please log in to create a virtual account');
+      showError('Authentication Required', 'Please log in to create a virtual account');
       return;
     }
 
@@ -136,7 +136,7 @@ export const PaymentPointCard: React.FC<PaymentPointCardProps> = ({ className })
       await paymentPointService.copyAccountDetails(account);
       success('Copied!', 'Account details copied to clipboard!');
     } catch (error) {
-      error('Copy Failed', 'Failed to copy account details');
+      showError('Copy Failed', 'Failed to copy account details');
     }
   };
 

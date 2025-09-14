@@ -214,14 +214,27 @@ export function ReferEarnPage() {
     const referralLink = `https://instantnums.com/signup?ref=${referralData.referralCode}`;
     const shareText = `Join InstantNums and get virtual numbers for SMS verification! Use my referral link: ${referralLink}`;
     
-    if (navigator.share) {
-      navigator.share({
-        title: 'Join InstantNums',
-        text: shareText,
-        url: referralLink
-      });
+    // Check if Web Share API is supported and allowed
+    if (navigator.share && navigator.canShare && navigator.canShare({ title: 'Join InstantNums', text: shareText, url: referralLink })) {
+      try {
+        navigator.share({
+          title: 'Join InstantNums',
+          text: shareText,
+          url: referralLink
+        }).catch((shareError) => {
+          console.log('Share was cancelled or failed:', shareError);
+          // Fallback to clipboard
+          navigator.clipboard.writeText(shareText);
+          success('Copied!', 'Referral message copied to clipboard');
+        });
+      } catch (shareError) {
+        console.log('Share API error:', shareError);
+        // Fallback to clipboard
+        navigator.clipboard.writeText(shareText);
+        success('Copied!', 'Referral message copied to clipboard');
+      }
     } else {
-      // Fallback - copy to clipboard
+      // Direct fallback - copy to clipboard
       navigator.clipboard.writeText(shareText);
       success('Copied!', 'Referral message copied to clipboard');
     }
