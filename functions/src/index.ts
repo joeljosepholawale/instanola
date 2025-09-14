@@ -225,7 +225,6 @@ export const createPaymentPointVirtualAccount = onCall({
       headers: {
         'Authorization': `Bearer ${secretKey.trim()}`,
         'api-key': apiKey.trim(),
-        'Content-Type': 'application/json'
       },
       body: JSON.stringify(requestBody)
     });
