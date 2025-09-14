@@ -514,7 +514,7 @@ export const sendNotificationEmail = onCall({
     }
 
     // Configure nodemailer transporter
-    const transporter = nodemailer.createTransporter({
+    const transporter = nodemailer.createTransport({
       service: 'gmail',
       auth: {
         user: smtpUserEmail,
