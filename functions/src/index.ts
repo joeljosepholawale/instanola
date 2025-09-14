@@ -215,11 +215,6 @@ export const createPaymentPointVirtualAccount = onCall({
         hasBusinessId: !!businessId 
       });
       throw new HttpsError('failed-precondition', 'PaymentPoint credentials not configured. Please contact support.');
-        hasApiKey: !!apiKey, 
-        hasSecretKey: !!secretKey, 
-        hasBusinessId: !!businessId 
-      });
-      throw new HttpsError('failed-precondition', 'PaymentPoint credentials not configured. Please contact support.');
     }
 
     console.log('Creating PaymentPoint virtual account for user:', userId);
@@ -535,7 +530,7 @@ export const sendNotificationEmail = onCall({
     }
 
     // Configure nodemailer transporter
-    const transporter = nodemailer.createTransport({
+    const transporter = nodemailer.createTransporter({
       service: 'gmail',
       auth: {
         user: smtpUserEmail,
