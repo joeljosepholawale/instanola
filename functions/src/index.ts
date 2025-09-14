@@ -97,6 +97,7 @@ interface PaymentPointVirtualAccountRequest {
   phoneNumber?: string;
   bankCode: string[];
   businessId: string;
+}
 
 interface PaymentPointVirtualAccountResponse {
   status: string;
@@ -214,6 +215,7 @@ export const createPaymentPointVirtualAccount = onCall({
       phoneNumber: customerPhone || '09000000000',
       bankCode: ['20946', '20897'], // Both Palmpay and Opay
       businessId: businessId.trim()
+    };
 
     console.log('PaymentPoint API request:', JSON.stringify(requestBody, null, 2));
 
@@ -223,6 +225,7 @@ export const createPaymentPointVirtualAccount = onCall({
       headers: {
         'Authorization': `Bearer ${secretKey.trim()}`,
         'api-key': apiKey.trim(),
+        'Content-Type': 'application/json'
       },
       body: JSON.stringify(requestBody)
     });
@@ -512,7 +515,7 @@ export const sendNotificationEmail = onCall({
     }
 
     // Configure nodemailer transporter
-    const transporter = nodemailer.createTransport({
+    const transporter = nodemailer.createTransporter({
       service: 'gmail',
       auth: {
         user: smtpUserEmail,
