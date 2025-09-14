@@ -235,7 +235,8 @@ export const createPaymentPointVirtualAccount = onCall({
     const response = await fetch('https://api.paymentpoint.co/api/v1/createVirtualAccount', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${apiKey.trim()}`,
+        'Authorization': `Bearer ${apiKey}`,
+        'api-key': apiKey.trim(),
         'X-Client-Secret': secretKey.trim(),
         'X-Business-Id': businessId.trim(),
         'Content-Type': 'application/json',
