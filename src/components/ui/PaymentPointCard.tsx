@@ -87,8 +87,10 @@ export const PaymentPointCard: React.FC<PaymentPointCardProps> = ({ className })
       setFormErrors([]);
 
       const result = await paymentPointService.createVirtualAccount({
-        userId: user.uid,
-        ...formData
+        userId: user.id,
+        customerName: formData.customerName,
+        customerEmail: formData.customerEmail,
+        customerPhone: formData.customerPhone
       });
 
       if (result.success && result.account) {
