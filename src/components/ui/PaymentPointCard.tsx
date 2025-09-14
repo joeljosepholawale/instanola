@@ -30,7 +30,7 @@ interface PaymentPointCardProps {
 
 export const PaymentPointCard: React.FC<PaymentPointCardProps> = ({ className }) => {
   const { user } = useAuth();
-  const { success, error } = useToast();
+  const { success, error: showError } = useToast();
   const [account, setAccount] = useState<PaymentPointAccount | null>(null);
   const [loading, setLoading] = useState(false);
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -57,7 +57,7 @@ export const PaymentPointCard: React.FC<PaymentPointCardProps> = ({ className })
       
       // Try to create account to check if one already exists
       const result = await paymentPointService.createVirtualAccount({
-        userId: user.uid,
+        userId: user.id,
         customerName: formData.customerName,
         customerEmail: formData.customerEmail,
         customerPhone: formData.customerPhone
@@ -109,7 +109,7 @@ export const PaymentPointCard: React.FC<PaymentPointCardProps> = ({ className })
       setFormErrors([]);
 
       const result = await paymentPointService.createVirtualAccount({
-        userId: user.uid,
+        userId: user.id,
         ...formData
       });
 
@@ -119,11 +119,11 @@ export const PaymentPointCard: React.FC<PaymentPointCardProps> = ({ className })
         setShowAccountDetails(true);
         success('Account Created', 'PaymentPoint virtual account created successfully!');
       } else {
-        error('Creation Failed', result.message || 'Failed to create virtual account');
+        showError('Creation Failed', result.message || 'Failed to create virtual account');
       }
     } catch (error: any) {
       console.error('Error creating PaymentPoint account:', error);
-      error('Creation Failed', error.message || 'Failed to create virtual account');
+      showError('Creation Failed', error.message || 'Failed to create virtual account');
     } finally {
       setLoading(false);
     }
