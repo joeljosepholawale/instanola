@@ -1,0 +1,41 @@
+# Security Policy for ProxyNumSMS
+
+Contact: security@proxynumsms.com
+Expires: 2025-12-31T23:59:59.000Z
+Encryption: https://proxynumsms.com/pgp-key.txt
+Preferred-Languages: en
+Policy: https://proxynumsms.com/security-policy
+
+# Vulnerability Disclosure Program
+
+We appreciate security researchers who report vulnerabilities responsibly.
+
+## Scope
+- Main application (*.proxynumsms.com)
+- API endpoints (/api/*)
+- Admin panel functionality
+- Payment processing systems
+
+## Out of Scope
+- Third-party services (DaisySMS, PaymentPoint, etc.)
+- Social engineering attacks
+- Physical security
+- Denial of Service (DoS) attacks
+
+## Reporting Guidelines
+1. Send detailed reports to security@proxynumsms.com
+2. Include steps to reproduce the vulnerability
+3. Provide proof of concept (if applicable)
+4. Do not access user data or cause service disruption
+5. Allow reasonable time for fixes before public disclosure
+
+## Response Timeline
+- Initial response: Within 48 hours
+- Confirmation and assessment: Within 7 days
+- Fix deployment: Within 30 days (depending on severity)
+- Public disclosure: 90 days after fix (or by mutual agreement)
+
+## Recognition
+Researchers who report valid vulnerabilities will be acknowledged in our security hall of fame (unless they prefer to remain anonymous).
+
+Thank you for helping keep ProxyNumSMS secure!

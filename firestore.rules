@@ -1,0 +1,409 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Users can read and write their own user document
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+      // Additional security: prevent unauthorized data modification
+      allow write: if request.auth != null && 
+        request.auth.uid == userId &&
+        // Prevent users from modifying admin status
+        (!('isAdmin' in request.resource.data) || 
+         request.resource.data.isAdmin == resource.data.isAdmin) &&
+        // Prevent users from modifying blocked status
+        (!('isBlocked' in request.resource.data) || 
+         request.resource.data.isBlocked == resource.data.isBlocked) &&
+        // Allow wallet balance changes for purchases/rentals/deposits/referrals
+        (!('walletBalance' in request.resource.data) || 
+         request.resource.data.walletBalance == resource.data.walletBalance ||
+         (request.resource.data.walletBalance is number && 
+          resource.data.walletBalance is number)) &&
+        // Allow NGN balance changes for purchases/rentals/deposits/referrals  
+         (!('walletBalanceNGN' in request.resource.data) || 
+          request.resource.data.walletBalanceNGN == resource.data.walletBalanceNGN ||
+          (request.resource.data.walletBalanceNGN is number &&
+           resource.data.walletBalanceNGN is number));
+         
+      // Allow admins to read/write all user documents
+      allow read, write: if request.auth != null && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+    }
+    
+    // Transactions - users can only access their own, admins can access all
+    match /transactions/{transactionId} {
+      allow read, write: if request.auth != null && 
+        resource.data.userId == request.auth.uid;
+      allow create: if request.auth != null && 
+        request.resource.data.userId == request.auth.uid &&
+        // Additional validation for transaction creation
+        request.resource.data.keys().hasAll(['userId', 'type', 'amount', 'status']) &&
+        request.resource.data.type in ['deposit', 'purchase', 'refund', 'rental'] &&
+        request.resource.data.amount is number &&
+        request.resource.data.status in ['pending', 'completed', 'failed'];
+      // Allow admins to read/write all transactions
+      allow read, write: if request.auth != null && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+    }
+    
+    // Rentals - users can only access their own, admins can access all
+    match /rentals/{rentalId} {
+      allow read, write: if request.auth != null && 
+        resource.data.userId == request.auth.uid;
+      allow create: if request.auth != null && 
+        request.resource.data.userId == request.auth.uid;
+      // Allow admins to read/write all rentals
+      allow read, write: if request.auth != null && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+    }
+    
+    // SMS messages - users can only access messages for their numbers
+    match /sms_messages/{messageId} {
+      allow read, write: if request.auth != null && 
+        resource.data.userId == request.auth.uid;
+      allow create: if request.auth != null && 
+        request.resource.data.userId == request.auth.uid;
+      // Allow admins to read all messages
+      allow read: if request.auth != null && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+    }
+    
+    // Manual payments - users can only access their own, admins can access all
+    match /manual_payments/{paymentId} {
+      allow read, write: if request.auth != null && 
+        resource.data.userId == request.auth.uid;
+      allow create: if request.auth != null && 
+        request.resource.data.userId == request.auth.uid;
+      // Allow admins to read/write all manual payments
+      allow read, write: if request.auth != null && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+    }
+    
+    // Crypto payments - users can only access their own, admins can access all
+    match /crypto_payments/{paymentId} {
+      allow read, write: if request.auth != null && 
+        resource.data.userId == request.auth.uid;
+      allow create: if request.auth != null && 
+        request.resource.data.userId == request.auth.uid;
+      // Allow admins to read/write all crypto payments
+      allow read, write: if request.auth != null && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+    }
+    
+    // System collections - admin only
+    match /system/{document} {
+      allow read, write: if request.auth != null && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+    }
+    
+    // Failed refunds - admin only
+    match /failed_refunds/{refundId} {
+      allow read, write: if request.auth != null && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+    }
+    
+    // Admin actions - admin only
+    match /admin_actions/{actionId} {
+      allow read, write: if request.auth != null && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+    }
+    
+    // API keys - admin only
+    match /api_keys/{keyId} {
+      allow read, write: if request.auth != null && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+    }
+    
+    // Blocked IPs - admin only
+    match /blocked_ips/{ipId} {
+      allow read, write: if request.auth != null && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+    }
+    
+    // Security events - admin only
+    match /security_events/{eventId} {
+      allow read, write: if request.auth != null && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+      // Allow system to create security events
+      allow create: if request.auth != null &&
+        request.resource.data.keys().hasAll(['type', 'severity', 'timestamp']) &&
+        request.resource.data.type in ['login_attempt', 'admin_access', 'payment_fraud', 'api_abuse', 'suspicious_activity'] &&
+        request.resource.data.severity in ['low', 'medium', 'high', 'critical'];
+    }
+    
+    // Data access logs - admin only read, system can create
+    match /data_access_logs/{logId} {
+      allow read: if request.auth != null && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+      allow create: if request.auth != null &&
+        request.resource.data.userId == request.auth.uid &&
+        request.resource.data.keys().hasAll(['userId', 'dataType', 'operation', 'timestamp']);
+    }
+    
+    // Security alerts - admin only
+    match /security_alerts/{alertId} {
+      allow read, write: if request.auth != null && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+    }
+    
+    // API usage - admin only
+    match /api_usage/{usageId} {
+      allow read, write: if request.auth != null && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+      // Allow users to create their own usage logs
+      allow create: if request.auth != null &&
+        request.resource.data.userId == request.auth.uid;
+    }
+    
+    // Webhook logs - admin only
+    match /webhook_logs/{logId} {
+      allow read, write: if request.auth != null && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+    }
+    
+    // Admin profiles - admin only
+    match /admin_profiles/{profileId} {
+      allow read, write: if request.auth != null && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+    }
+    
+    // PaymentPoint payments - users can only access their own, admins can access all
+    match /paymentpoint_payments/{paymentId} {
+      allow read, write: if request.auth != null && 
+        resource.data.userId == request.auth.uid;
+      allow create: if request.auth != null && 
+        request.resource.data.userId == request.auth.uid;
+      // Allow admins to read/write all PaymentPoint payments
+      allow read, write: if request.auth != null && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+    }
+    
+    // PaymentPoint accounts - users can only access their own, admins can access all
+    match /paymentpoint_accounts/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+      // Allow admins to read/write all accounts
+      allow read, write: if request.auth != null && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+    }
+    
+    // Failed webhooks - admin only
+    match /failed_webhooks/{webhookId} {
+      allow read, write: if request.auth != null && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+    }
+    
+    // Canned responses - admin only
+    match /canned_responses/{responseId} {
+      allow read, write: if request.auth != null && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+    }
+    
+    // Currency conversions - users can only access their own conversions
+    match /currency_conversions/{conversionId} {
+      allow read, write: if request.auth != null && 
+        resource.data.userId == request.auth.uid;
+      allow create: if request.auth != null && 
+        request.auth.uid != null &&
+        request.resource.data.keys().hasAll(['userId']) &&
+        request.resource.data.userId is string &&
+        request.resource.data.userId == request.auth.uid;
+      // Allow admins to read/write all conversions
+      allow read, write: if request.auth != null && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+    }
+    
+    // Config collection - authenticated users can read specific configs, write access for admins only
+    match /config/{configId} {
+      // Only allow authenticated users to read specific non-sensitive configs
+      allow read: if request.auth != null && 
+        configId in ['pricing', 'currency', 'custom_pricing', 'system'] &&
+        configId != 'api_keys' && configId != 'daisysms'; // Block sensitive API data
+      // Allow admins to read/write all configs  
+      allow read, write: if request.auth != null && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true &&
+        // Additional security for pricing config
+        (configId != 'pricing' || 
+         (request.resource.data.keys().hasAll(['updatedBy', 'updatedAt']) &&
+          request.resource.data.updatedBy == request.auth.uid &&
+          request.resource.data.markupPercentage is number &&
+          request.resource.data.markupPercentage >= 0 &&
+          request.resource.data.markupPercentage <= 100));
+    }
+    
+    // Announcements - all authenticated users can read, only admins can write
+    match /announcements/{announcementId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+    }
+    
+    // User announcements - users can read/write their own, admins can read/write all
+    match /user_announcements/{userAnnouncementId} {
+      // Allow users to read/write documents that start with their user ID
+      allow read, write: if request.auth != null && 
+        userAnnouncementId.matches('^' + request.auth.uid + '_.*');
+      // Allow admins to read/write all user announcements
+      allow read, write: if request.auth != null && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+    }
+    
+    // Support messages - authenticated users can create, users can read their own, admins can read/write all
+    match /support_messages/{messageId} {
+      // Only allow authenticated users to create support messages to prevent spam
+      allow create: if request.auth != null && 
+        request.resource.data.userId == request.auth.uid;
+      // Allow users to read their own messages (if they provided email and are authenticated)
+      allow read: if request.auth != null && 
+        (resource.data.email == request.auth.token.email || 
+         resource.data.userId == request.auth.uid);
+      // Allow admins to read and write all support messages
+      allow read, write: if request.auth != null && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+    }
+    
+    // Plisio invoices - users can only access their own, admins can access all
+    match /plisio_invoices/{invoiceId} {
+      allow read, write: if request.auth != null && 
+        resource.data.userId == request.auth.uid;
+      allow create: if request.auth != null && 
+        request.resource.data.userId == request.auth.uid;
+      // Allow admins to read/write all invoices
+      allow read, write: if request.auth != null && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+    }
+    
+    // NOWPayments payments - users can only access their own, admins can access all
+    match /nowpayments_payments/{paymentId} {
+      allow read, write: if request.auth != null && 
+        resource.data.userId == request.auth.uid;
+      allow create: if request.auth != null && 
+        request.resource.data.userId == request.auth.uid &&
+        // Validate required fields for NOWPayments
+        request.resource.data.keys().hasAll(['userId', 'paymentId', 'orderId', 'amount', 'currency', 'status']) &&
+        request.resource.data.amount is number &&
+        request.resource.data.amount > 0 &&
+        request.resource.data.status in ['waiting', 'confirming', 'confirmed', 'sending', 'partially_paid', 'finished', 'failed', 'refunded', 'expired'];
+      // Allow admins to read/write all NOWPayments
+      allow read, write: if request.auth != null && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+    }
+    
+    // Webhooks - admin only access for security
+    match /webhooks/{webhookId} {
+      allow read, write: if request.auth != null && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+    }
+    
+    // Default deny all other access
+    match /{document=**} {
+      allow read, write: if false;
+    }
+    
+    // Storage rules for receipts (removed duplicate)
+    match /receipts/{userId}/{receiptId} {
+      // Users can upload their own receipts
+      allow write: if request.auth != null && request.auth.uid == userId;
+      // Users can read their own receipts, admins can read all
+      allow read: if request.auth != null && 
+        (request.auth.uid == userId || 
+         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true));
+    }
+    
+    // Stats collection - allow authenticated users to update, admins to read/write all
+    match /stats/{statsId} {
+      allow read, write: if request.auth != null && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+      // Allow authenticated users to update global stats for rental tracking
+      allow read, write: if request.auth != null && statsId == 'global';
+    }
+    
+    // Payments collection - users can only access their own, admins can access all  
+    match /payments/{paymentId} {
+      allow read, write: if request.auth != null && 
+        resource.data.userId == request.auth.uid;
+      allow create: if request.auth != null && 
+        request.resource.data.userId == request.auth.uid;
+      // Allow admins to read/write all payments
+      allow read, write: if request.auth != null && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+    }
+    
+    // Referral earnings - users can read their own, system can create, admins can access all
+    match /referralEarnings/{earningId} {
+      allow read: if request.auth != null && 
+        (resource.data.referrerId == request.auth.uid || 
+         resource.data.referredUserId == request.auth.uid);
+      // Allow system to create referral earnings (via Cloud Functions)
+      allow create: if request.auth != null &&
+        request.resource.data.keys().hasAll(['referrerId', 'referredUserId', 'amount', 'status']) &&
+        request.resource.data.amount is number &&
+        request.resource.data.status in ['earned', 'paid'];
+      // Allow admins to read/write all referral earnings
+      allow read, write: if request.auth != null && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+    }
+    
+    // Loyalty transactions - users can read their own, system can create, admins can access all
+    match /loyaltyTransactions/{transactionId} {
+      allow read: if request.auth != null && 
+        resource.data.userId == request.auth.uid;
+      // Allow system to create loyalty transactions (via Cloud Functions)
+      allow create: if request.auth != null &&
+        request.resource.data.keys().hasAll(['userId', 'action', 'points']) &&
+        request.resource.data.userId == request.auth.uid &&
+        request.resource.data.points is number;
+      // Allow admins to read/write all loyalty transactions
+      allow read, write: if request.auth != null && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+    }
+    
+    // Loyalty redemptions - users can read their own, system can create, admins can access all
+    match /loyaltyRedemptions/{redemptionId} {
+      allow read: if request.auth != null && 
+        resource.data.userId == request.auth.uid;
+      // Allow system to create loyalty redemptions (via Cloud Functions)
+      allow create: if request.auth != null &&
+        request.resource.data.keys().hasAll(['userId', 'points', 'cashValue']) &&
+        request.resource.data.userId == request.auth.uid &&
+        request.resource.data.points is number &&
+        request.resource.data.cashValue is number;
+      // Allow admins to read/write all loyalty redemptions
+      allow read, write: if request.auth != null && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+    }
+  }
+}

@@ -1,0 +1,8 @@
+[31mx[39m Build failed in 5.10s
+[31merror during build:
+[31mCould not resolve "./label" from "../../../../../../C:/Users/Techi/OneDrive/Desktop/numinstant number/src/components/ui/PaymentPointCard.tsx"[31m
+file: [36mC:/Users/Techi/OneDrive/Desktop/numinstant number/src/components/ui/PaymentPointCard.tsx[31m
+    at getRollupError (file:///c:/Users/Techi/OneDrive/Desktop/numinstant%20number/node_modules/rollup/dist/es/shared/parseAst.js:401:41)
+    at error (file:///c:/Users/Techi/OneDrive/Desktop/numinstant%20number/node_modules/rollup/dist/es/shared/parseAst.js:397:42)
+    at ModuleLoader.handleInvalidResolvedId (file:///c:/Users/Techi/OneDrive/Desktop/numinstant%20number/node_modules/rollup/dist/es/shared/node-entry.js:21534:24)
+    at file:///c:/Users/Techi/OneDrive/Desktop/numinstant%20number/node_modules/rollup/dist/es/shared/node-entry.js:21494:26[39m

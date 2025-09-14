@@ -1,0 +1,31 @@
+{"users": [
+{
+  "localId": "8uLeWJ88vxTMkXtdbxLaWLDVzKo1",
+  "email": "admin@instantnum.com",
+  "emailVerified": false,
+  "passwordHash": "mwGzh7HsSIOa5rNDcLaaln39v74bjuA+hiwbg0dAJVmEErxNCIdF4LjRdQVFIzE25aDJu/Vw2dyPZogxsSxN2g==",
+  "salt": "aw/T/X1H/RC09w==",
+  "lastSignedInAt": "1757375360790",
+  "createdAt": "1757375360790",
+  "providerUserInfo": []
+},
+{
+  "localId": "OAcf76RGHgNnjyMXDP5zOuxB3P73",
+  "email": "admin@instantnums.com",
+  "emailVerified": false,
+  "passwordHash": "IS7qunca/+wma8AmUIXFPPj5offwgECGc6pw/zuejNyaxH6hnSHXziNKGgOA6Gbses89Y7aMTW9EXng7I0wyMA==",
+  "salt": "reYrK/fQW+mamw==",
+  "lastSignedInAt": "1757374284324",
+  "createdAt": "1757374284324",
+  "providerUserInfo": []
+},
+{
+  "localId": "TAZOwCqZ9NaAFVRSgP1xI8wuZTj2",
+  "email": "joeljosepholawale@gmail.com",
+  "emailVerified": false,
+  "passwordHash": "4NV3yiRvAxfd9PSliCtPGHtZaoneoXy74Pg2C0+Mj4cAgbqawm6KpsHMzGBMa7GYiArwq5qqGoCaFiuJ1z0jHA==",
+  "salt": "k9CZ01ja1skNKA==",
+  "lastSignedInAt": "1757619288869",
+  "createdAt": "1757444299454",
+  "providerUserInfo": []
+}]}
