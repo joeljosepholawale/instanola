@@ -512,7 +512,15 @@ export function NumbersPage() {
       setInitialTimers((prev) => ({ ...prev, ...timers }));
     } catch (err) {
       console.error("Error loading rentals:", err);
-      setRentals([]);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to load rentals';
+      
+      if (errorMessage.includes('index') && errorMessage.includes('building')) {
+        setError('Database is updating. Please wait a few minutes and refresh the page.');
+      } else if (errorMessage.includes('index')) {
+        setError('Database configuration is being set up. Please try again in a few minutes.');
+      } else {
+        setError('Failed to load rentals');
+      }
     } finally {
       setLoading(false);
     }

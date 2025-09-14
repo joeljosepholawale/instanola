@@ -49,34 +49,12 @@ export const PaymentPointCard: React.FC<PaymentPointCardProps> = ({ className })
     checkExistingAccount();
   }, [user]);
 
-  const checkExistingAccount = async () => {
+  const checkExistingAccount = () => {
     if (!user) return;
 
-    try {
-      setLoading(true);
-      
-      // Try to create account to check if one already exists
-      const result = await paymentPointService.createVirtualAccount({
-        userId: user.id,
-        customerName: formData.customerName,
-        customerEmail: formData.customerEmail,
-        customerPhone: formData.customerPhone
-      });
-
-      if (result.success && result.account) {
-        setAccount(result.account);
-        setShowCreateForm(false);
-      }
-    } catch (error: any) {
-      // If account doesn't exist, show create form
-      if (error.message?.includes('Missing required fields')) {
-        setShowCreateForm(true);
-      } else {
-        console.error('Error checking existing account:', error);
-      }
-    } finally {
-      setLoading(false);
-    }
+    // Simply show the create form if no account exists
+    // We'll check for existing accounts through other means
+    setShowCreateForm(true);
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -109,7 +87,7 @@ export const PaymentPointCard: React.FC<PaymentPointCardProps> = ({ className })
       setFormErrors([]);
 
       const result = await paymentPointService.createVirtualAccount({
-        userId: user.id,
+        userId: user.uid,
         ...formData
       });
 

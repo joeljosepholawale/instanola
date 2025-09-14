@@ -209,7 +209,12 @@ export const createPaymentPointVirtualAccount = onCall({
     const businessId = paymentPointBusinessId.value();
     
     if (!apiKey || !secretKey || !businessId) {
-      throw new HttpsError('failed-precondition', 'PaymentPoint credentials not configured');
+      console.error('PaymentPoint credentials missing:', { 
+        hasApiKey: !!apiKey, 
+        hasSecretKey: !!secretKey, 
+        hasBusinessId: !!businessId 
+      });
+      throw new HttpsError('failed-precondition', 'PaymentPoint credentials not configured. Please contact support.');
     }
 
     console.log('Creating PaymentPoint virtual account for user:', userId);
