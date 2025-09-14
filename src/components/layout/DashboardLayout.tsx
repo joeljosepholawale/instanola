@@ -188,21 +188,6 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                     </div>
                   </div>
 
-                  {/* Theme Toggle */}
-                  <button
-                    onClick={() => setDarkMode(!darkMode)}
-                    className="p-2 rounded-full text-gray-600 hover:text-gray-900 hover:bg-gray-100 transition-colors"
-                  >
-                    {darkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-                  </button>
-
-                  {/* Notification Badge */}
-                  <div className="relative">
-                    <div className="w-6 h-6 bg-gray-200 rounded-full flex items-center justify-center">
-                      <span className="text-xs font-bold text-gray-600">0</span>
-                    </div>
-                  </div>
-
                   {/* User Profile Dropdown */}
                   <div className="relative">
                     <button
