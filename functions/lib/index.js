@@ -33,7 +33,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.daisySmsWebhook = exports.daisySmsProxy = exports.redeemLoyaltyPoints = exports.awardLoyaltyPoints = exports.processReferralEarnings = exports.getNOWPaymentStatus = exports.nowPaymentsWebhook = exports.sendNotificationEmail = exports.paymentPointWebhook = exports.errorText = exports.createPaymentPointVirtualAccount = void 0;
+exports.daisySmsWebhook = exports.daisySmsProxy = exports.redeemLoyaltyPoints = exports.awardLoyaltyPoints = exports.processReferralEarnings = exports.getNOWPaymentStatus = exports.nowPaymentsWebhook = exports.sendNotificationEmail = exports.paymentPointWebhook = exports.createPaymentPointVirtualAccount = void 0;
 const https_1 = require("firebase-functions/v2/https");
 const app_1 = require("firebase-admin/app");
 const firestore_1 = require("firebase-admin/firestore");
@@ -111,76 +111,75 @@ exports.createPaymentPointVirtualAccount = (0, https_1.onCall)({
             name: customerName,
             phoneNumber: customerPhone || '09000000000',
             bankCode: ['20946', '20897'], // Both Palmpay and Opay
-            businessId: businessId.trim(),
-            console, : .log('PaymentPoint API request:', JSON.stringify(requestBody, null, 2)),
-            // Make API call to PaymentPoint with correct headers from documentation
-            const: response = await fetch('https://api.paymentpoint.co/api/v1/createVirtualAccount', {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${secretKey.trim()}`,
-                    'api-key': apiKey.trim(),
-                },
-                body: JSON.stringify(requestBody)
-            }),
-            console, : .log('PaymentPoint API response status:', response.status),
-            if(, response) { }, : .ok
+            businessId: businessId.trim()
+        };
+        console.log('PaymentPoint API request:', JSON.stringify(requestBody, null, 2));
+        // Make API call to PaymentPoint with correct headers from documentation
+        const response = await fetch('https://api.paymentpoint.co/api/v1/createVirtualAccount', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${secretKey.trim()}`,
+                'api-key': apiKey.trim(),
+            },
+            body: JSON.stringify(requestBody)
+        });
+        console.log('PaymentPoint API response status:', response.status);
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('PaymentPoint API error:', response.status, errorText);
+            let errorData = {};
+            try {
+                errorData = JSON.parse(errorText);
+            }
+            catch (parseError) {
+                errorData = { message: errorText };
+            }
+            throw new https_1.HttpsError('internal', `PaymentPoint API error: ${response.status} - ${errorData.message || errorText}`);
+        }
+        const result = await response.json();
+        console.log('PaymentPoint API response:', JSON.stringify(result, null, 2));
+        if (result.status !== 'success' || !result.bankAccounts || result.bankAccounts.length === 0) {
+            console.error('PaymentPoint invalid response:', result);
+            throw new https_1.HttpsError('internal', result.message || 'Failed to create virtual account');
+        }
+        const bankAccount = result.bankAccounts[0];
+        // Store account data in Firestore
+        const accountData = {
+            userId: userId,
+            accountNumber: bankAccount.accountNumber,
+            accountName: bankAccount.accountName,
+            bankName: bankAccount.bankName,
+            bankCode: bankAccount.bankCode,
+            customerName: customerName,
+            customerEmail: customerEmail,
+            customerPhone: customerPhone || null,
+            paymentPointCustomerId: result.customer.customer_id,
+            reservedAccountId: bankAccount.Reserved_Account_Id,
+            createdAt: firestore_2.FieldValue.serverTimestamp(),
+            isActive: true,
+            provider: 'paymentpoint'
+        };
+        await db.collection('paymentpoint_accounts').doc(userId).set(accountData);
+        console.log('PaymentPoint virtual account created successfully for user:', userId);
+        return {
+            success: true,
+            message: 'Virtual account created successfully',
+            account: {
+                accountNumber: bankAccount.accountNumber,
+                accountName: bankAccount.accountName,
+                bankName: bankAccount.bankName,
+                isPermanent: true
+            }
         };
     }
-    finally { }
+    catch (error) {
+        console.error('Error creating PaymentPoint virtual account:', error);
+        if (error instanceof https_1.HttpsError) {
+            throw error;
+        }
+        throw new https_1.HttpsError('internal', `Failed to create virtual account: ${error}`);
+    }
 });
-console.error('PaymentPoint API error:', response.status, exports.errorText);
-let errorData = {};
-try {
-    errorData = JSON.parse(exports.errorText);
-}
-catch (parseError) {
-    errorData = { message: exports.errorText };
-}
-throw new https_1.HttpsError('internal', `PaymentPoint API error: ${response.status} - ${errorData.message || exports.errorText}`);
-const result = await response.json();
-console.log('PaymentPoint API response:', JSON.stringify(result, null, 2));
-if (result.status !== 'success' || !result.bankAccounts || result.bankAccounts.length === 0) {
-    console.error('PaymentPoint invalid response:', result);
-    throw new https_1.HttpsError('internal', result.message || 'Failed to create virtual account');
-}
-const bankAccount = result.bankAccounts[0];
-// Store account data in Firestore
-const accountData = {
-    userId: userId,
-    accountNumber: bankAccount.accountNumber,
-    accountName: bankAccount.accountName,
-    bankName: bankAccount.bankName,
-    bankCode: bankAccount.bankCode,
-    customerName: customerName,
-    customerEmail: customerEmail,
-    customerPhone: customerPhone || null,
-    paymentPointCustomerId: result.customer.customer_id,
-    reservedAccountId: bankAccount.Reserved_Account_Id,
-    createdAt: firestore_2.FieldValue.serverTimestamp(),
-    isActive: true,
-    provider: 'paymentpoint'
-};
-await db.collection('paymentpoint_accounts').doc(userId).set(accountData);
-console.log('PaymentPoint virtual account created successfully for user:', userId);
-return {
-    success: true,
-    message: 'Virtual account created successfully',
-    account: {
-        accountNumber: bankAccount.accountNumber,
-        accountName: bankAccount.accountName,
-        bankName: bankAccount.bankName,
-        isPermanent: true
-    }
-};
-try { }
-catch (error) {
-    console.error('Error creating PaymentPoint virtual account:', error);
-    if (error instanceof https_1.HttpsError) {
-        throw error;
-    }
-    throw new https_1.HttpsError('internal', `Failed to create virtual account: ${error}`);
-}
-;
 // PaymentPoint Webhook Handler
 exports.paymentPointWebhook = (0, https_1.onRequest)({
     cors: true,
