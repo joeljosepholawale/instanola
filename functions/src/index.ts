@@ -215,6 +215,11 @@ export const createPaymentPointVirtualAccount = onCall({
         hasBusinessId: !!businessId 
       });
       throw new HttpsError('failed-precondition', 'PaymentPoint credentials not configured. Please contact support.');
+        hasApiKey: !!apiKey, 
+        hasSecretKey: !!secretKey, 
+        hasBusinessId: !!businessId 
+      });
+      throw new HttpsError('failed-precondition', 'PaymentPoint credentials not configured. Please contact support.');
     }
 
     console.log('Creating PaymentPoint virtual account for user:', userId);
@@ -235,8 +240,8 @@ export const createPaymentPointVirtualAccount = onCall({
     const response = await fetch('https://api.paymentpoint.co/api/v1/createVirtualAccount', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'X-Client-Secret': secretKey,
+        'Authorization': `Bearer ${apiKey.trim()}`,
+        'X-Client-Secret': secretKey.trim(),
         'X-Business-Id': businessId.trim(),
         'Content-Type': 'application/json',
         'Accept': 'application/json',
