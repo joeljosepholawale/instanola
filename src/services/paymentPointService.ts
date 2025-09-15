@@ -49,19 +49,21 @@ class PaymentPointService {
       // Handle Firebase function deployment issues
       if (error instanceof FirebaseError) {
         if (error.code === 'functions/not-found') {
-          throw new Error('PaymentPoint service is currently unavailable. Please contact support or try manual payment instead.');
+          throw new Error('PaymentPoint service is not available in development mode. Please use manual payment options.');
         } else if (error.code === 'functions/unauthenticated') {
           throw new Error('Authentication required. Please log in again.');
         } else if (error.code === 'functions/permission-denied') {
           throw new Error('Access denied. Please contact support.');
         } else if (error.code === 'functions/unavailable') {
-          throw new Error('PaymentPoint service is temporarily unavailable. Please try again later or use manual payment.');
+          throw new Error('PaymentPoint service is temporarily unavailable. Please use manual payment options.');
+        } else if (error.code === 'functions/internal') {
+          throw new Error('PaymentPoint service encountered an error. Please use manual payment options or contact support.');
         }
       }
       
       // Handle network errors
       if (error instanceof TypeError && error.message.includes('fetch failed')) {
-        throw new Error('PaymentPoint service is currently unavailable. Please try manual payment or contact support.');
+        throw new Error('PaymentPoint service connection failed. Please use manual payment options.');
       }
       
       throw error;

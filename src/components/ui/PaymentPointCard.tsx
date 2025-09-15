@@ -86,6 +86,21 @@ export const PaymentPointCard: React.FC<PaymentPointCardProps> = ({ className })
       setLoading(true);
       setFormErrors([]);
 
+      // Check if Firebase Functions are available
+      if (!functions) {
+        console.warn('Firebase Functions not available in development environment');
+        showError(
+          'Service Unavailable', 
+          'PaymentPoint service is not available in development mode. Please use manual payment options instead.'
+        );
+        
+        // Auto-redirect to manual payment after showing error
+        setTimeout(() => {
+          setShowCreateForm(false);
+          // You can trigger manual payment modal here if needed
+        }, 3000);
+        return;
+      }
       const result = await paymentPointService.createVirtualAccount({
         userId: user.id,
         customerName: formData.customerName,
@@ -103,7 +118,31 @@ export const PaymentPointCard: React.FC<PaymentPointCardProps> = ({ className })
       }
     } catch (error: any) {
       console.error('Error creating PaymentPoint account:', error);
-      showError('Creation Failed', error.message || 'Failed to create virtual account');
+      
+      // Handle specific Firebase errors
+      if (error.code === 'functions/not-found') {
+        showError(
+          'Service Not Available', 
+          'PaymentPoint service is not deployed. Please use manual payment options or contact support.'
+        );
+      } else if (error.code === 'functions/internal' || error.message?.includes('fetch failed')) {
+        showError(
+          'Service Temporarily Unavailable', 
+          'PaymentPoint service is currently unavailable. Please try manual payment or contact support.'
+        );
+      } else if (error.code === 'functions/unauthenticated') {
+        showError('Authentication Error', 'Please log out and log back in to try again.');
+      } else {
+        showError('Creation Failed', error.message || 'Failed to create virtual account');
+      }
+      
+      // Auto-suggest manual payment as alternative
+      setTimeout(() => {
+        if (error.code === 'functions/not-found' || error.code === 'functions/internal') {
+          console.log('Suggesting manual payment as alternative to PaymentPoint');
+          // The error message already suggests manual payment
+        }
+      }, 2000);
     } finally {
       setLoading(false);
     }
