@@ -109,17 +109,18 @@ exports.createPaymentPointVirtualAccount = (0, https_1.onCall)({
         const requestBody = {
             email: customerEmail,
             name: customerName,
-            phoneNumber: customerPhone || '09000000000',
-            bankCode: ['20946', '20897'], // Both Palmpay and Opay
+            phoneNumber: customerPhone || '08000000000',
+            bankCode: ['20946'], // Palmpay bank code only
             businessId: businessId.trim()
         };
         console.log('PaymentPoint API request:', JSON.stringify(requestBody, null, 2));
         // Make API call to PaymentPoint with correct headers from documentation
-        const response = await fetch('https://api.paymentpoint.co/api/v1/createVirtualAccount', {
+        const response = await fetch('https://api.paymentpoint.ng/api/v1/createVirtualAccount', {
             method: 'POST',
             headers: {
+                'Content-Type': 'application/json',
                 'Authorization': `Bearer ${secretKey.trim()}`,
-                'api-key': apiKey.trim(),
+                'X-API-Key': apiKey.trim()
             },
             body: JSON.stringify(requestBody)
         });
