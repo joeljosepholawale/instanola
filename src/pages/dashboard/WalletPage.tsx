@@ -49,7 +49,6 @@ export function WalletPage() {
   
   const [balanceUSD, setBalanceUSD] = useState(0);
   const [balanceNGN, setBalanceNGN] = useState(0);
-  const [balanceNGN, setBalanceNGN] = useState(0);
   const [loading, setLoading] = useState(true);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [showPlisioModal, setShowPlisioModal] = useState(false);
