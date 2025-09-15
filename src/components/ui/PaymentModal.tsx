@@ -4,7 +4,6 @@ import { Button } from './Button';
 import { Input } from './Input';
 import { Select } from './Select';
 import { Card } from './Card';
-import { ManualPaymentModal } from './ManualPaymentModal';
 import { ManualCryptoPaymentModal } from './ManualCryptoPaymentModal';
 import { paymentPointService } from '../../services/paymentPointService';
 import { useAuth } from '../../hooks/useAuth';
@@ -28,7 +27,6 @@ export function PaymentModal({ isOpen, onClose, onSuccess, exchangeRate, directP
   const [selectedMethod, setSelectedMethod] = useState('');
   const [amount, setAmount] = useState('');
   const [loading, setLoading] = useState(false);
-  const [showManualModal, setShowManualModal] = useState(false);
   const [showManualCryptoModal, setShowManualCryptoModal] = useState(false);
   const [hasVirtualAccount, setHasVirtualAccount] = useState(false);
   const [virtualAccount, setVirtualAccount] = useState<any>(null);
@@ -90,9 +88,7 @@ export function PaymentModal({ isOpen, onClose, onSuccess, exchangeRate, directP
   const handleMethodSelect = (method: string) => {
     setSelectedMethod(method);
     
-    if (method === 'manual') {
-      setShowManualModal(true);
-    } else if (method === 'crypto') {
+    if (method === 'crypto') {
       setShowManualCryptoModal(true);
     } else if (method === 'paymentpoint') {
       if (hasVirtualAccount) {
@@ -162,9 +158,9 @@ export function PaymentModal({ isOpen, onClose, onSuccess, exchangeRate, directP
       
       // If PaymentPoint is unavailable, suggest alternative payment methods
       if (errorMessage.includes('unavailable') || errorMessage.includes('contact support')) {
-        // Auto-redirect to manual payment as fallback
+        // Show crypto payment as alternative
         setTimeout(() => {
-          setShowManualModal(true);
+          setShowManualCryptoModal(true);
         }, 2000);
       }
     } finally {
@@ -181,7 +177,6 @@ export function PaymentModal({ isOpen, onClose, onSuccess, exchangeRate, directP
 
   const handleClose = () => {
     resetModal();
-    setShowManualModal(false);
     setShowManualCryptoModal(false);
     onClose();
   };
@@ -239,26 +234,6 @@ export function PaymentModal({ isOpen, onClose, onSuccess, exchangeRate, directP
                     </div>
                   </button>
 
-                  {/* Manual Payment Option */}
-                  <button
-                    onClick={() => handleMethodSelect('manual')}
-                    className="w-full p-3 border border-gray-200 rounded-lg hover:border-orange-300 hover:bg-orange-50 transition-all text-left"
-                  >
-                    <div className="flex items-center space-x-3">
-                      <div className="w-8 h-8 bg-orange-100 rounded-lg flex items-center justify-center">
-                        <Smartphone className="w-4 h-4 text-orange-600" />
-                      </div>
-                      <div className="flex-1">
-                        <h4 className="font-medium text-gray-900 text-sm">Manual Payment (Naira)</h4>
-                        <p className="text-xs text-gray-600">OPAY, Bank transfer • Manual approval</p>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-xs font-semibold text-orange-600">10-15 min</div>
-                        <div className="text-xs text-gray-500">Admin review</div>
-                      </div>
-                    </div>
-                  </button>
-
                   {/* Crypto Payment Option */}
                   <button
                     onClick={() => handleMethodSelect('crypto')}
@@ -287,7 +262,6 @@ export function PaymentModal({ isOpen, onClose, onSuccess, exchangeRate, directP
                   </div>
                   <ul className="text-xs text-blue-700 mt-1 space-y-0.5">
                     <li>• PaymentPoint: Instant automatic crediting</li>
-                    <li>• Manual: Requires admin approval (10-15 min)</li>
                     <li>• Crypto: Fast confirmation after screenshot review</li>
                   </ul>
                 </div>
@@ -337,7 +311,7 @@ export function PaymentModal({ isOpen, onClose, onSuccess, exchangeRate, directP
                     <span className="font-medium">Service Notice</span>
                   </div>
                   <p className="text-xs text-yellow-700 mt-1">
-                    If PaymentPoint is unavailable, you'll be redirected to manual payment options.
+                    If PaymentPoint is unavailable, you'll be redirected to crypto payment options.
                   </p>
                 </div>
                 <div className="flex space-x-2">
@@ -432,19 +406,6 @@ export function PaymentModal({ isOpen, onClose, onSuccess, exchangeRate, directP
           </div>
         </div>
       </div>
-
-      {/* Manual Payment Modal */}
-      <ManualPaymentModal
-        isOpen={showManualModal}
-        onClose={() => {
-          setShowManualModal(false);
-          handleClose();
-        }}
-        onSuccess={() => {
-          setShowManualModal(false);
-          handlePaymentSuccess(0);
-        }}
-      />
 
       {/* Manual Crypto Payment Modal */}
       <ManualCryptoPaymentModal

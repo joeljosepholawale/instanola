@@ -483,17 +483,6 @@ export function WalletPage() {
                       <CreditCard className="w-4 h-4 mr-2" />
                       Add Naira
                     </Button>
-                    <Button
-                      onClick={() => setShowPlisioModal(true)}
-                      className={`${
-                        serviceStatus === 'degraded' 
-                          ? 'bg-gradient-to-r from-yellow-600 to-amber-600 hover:from-yellow-700 hover:to-amber-700'
-                          : 'bg-gradient-to-r from-emerald-600 to-green-700 hover:from-emerald-700 hover:to-green-800'
-                      }`}
-                    >
-                      <Bitcoin className="w-4 h-4 mr-2" />
-                      {serviceStatus === 'degraded' ? 'Try Crypto' : 'Add Crypto'}
-                    </Button>
                   </div>
                 </div>
               ) : (
