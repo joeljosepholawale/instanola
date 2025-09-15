@@ -53,8 +53,13 @@ export const PaymentPointCard: React.FC<PaymentPointCardProps> = ({ className })
   const checkExistingAccount = () => {
     if (!user) return;
 
-    // Simply show the create form if no account exists
-    // We'll check for existing accounts through other means
+    // Check if we're in development environment
+    if (import.meta.env.DEV) {
+      setShowCreateForm(false);
+      return;
+    }
+    
+    // Show the create form if not in development
     setShowCreateForm(true);
   };
 
@@ -183,13 +188,39 @@ export const PaymentPointCard: React.FC<PaymentPointCardProps> = ({ className })
       </CardHeader>
       
       <CardContent className="space-y-4">
+        {/* Development Mode Notice */}
+        {import.meta.env.DEV && (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+            <div className="flex items-start space-x-2">
+              <AlertCircle className="h-4 w-4 text-yellow-600 mt-0.5" />
+              <div className="text-sm text-yellow-800">
+                <p className="font-medium">Development Mode</p>
+                <p>PaymentPoint service requires Firebase Functions deployment. Use crypto payment for testing.</p>
+              </div>
+            </div>
+          </div>
+        )}
+        
         {/* Account Status Info */}
-        <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+        <div className={`border rounded-lg p-3 ${
+          import.meta.env.DEV 
+            ? 'bg-gray-50 border-gray-200' 
+            : 'bg-green-50 border-green-200'
+        }`}>
           <div className="flex items-start space-x-2">
-            <Info className="h-4 w-4 text-green-600 mt-0.5" />
-            <div className="text-sm text-green-800">
+            <Info className={`h-4 w-4 mt-0.5 ${
+              import.meta.env.DEV ? 'text-gray-600' : 'text-green-600'
+            }`} />
+            <div className={`text-sm ${
+              import.meta.env.DEV ? 'text-gray-800' : 'text-green-800'
+            }`}>
               <p className="font-medium">Bank Transfer Deposits</p>
-              <p>Transfer money from any Nigerian bank to your virtual account. Funds appear instantly with a 2% fee.</p>
+              <p>
+                {import.meta.env.DEV 
+                  ? 'Available in production. Use crypto payment for development testing.'
+                  : 'Transfer money from any Nigerian bank to your virtual account. Funds appear instantly with a 2% fee.'
+                }
+              </p>
             </div>
           </div>
         </div>
@@ -355,7 +386,7 @@ export const PaymentPointCard: React.FC<PaymentPointCardProps> = ({ className })
         )}
 
         {/* Show Create Form Button */}
-        {!account && !showCreateForm && (
+        {!account && !showCreateForm && !import.meta.env.DEV && (
           <Button
             onClick={() => setShowCreateForm(true)}
             className="w-full"

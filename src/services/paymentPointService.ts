@@ -32,6 +32,11 @@ class PaymentPointService {
    */
   async createVirtualAccount(data: PaymentPointVirtualAccountRequest): Promise<PaymentPointVirtualAccountResponse> {
     try {
+      // Check if we're in development environment
+      if (import.meta.env.DEV) {
+        throw new Error('PaymentPoint service is not available in development mode. This feature requires Firebase Functions deployment.');
+      }
+      
       console.log('Creating PaymentPoint virtual account:', data);
       
       // Check if Firebase Functions are available

@@ -154,14 +154,23 @@ export function PaymentModal({ isOpen, onClose, onSuccess, exchangeRate, directP
     } catch (err) {
       console.error('Error creating virtual account:', err);
       const errorMessage = err instanceof Error ? err.message : 'Failed to create virtual account';
-      error('Service Unavailable', errorMessage);
       
-      // If PaymentPoint is unavailable, suggest alternative payment methods
-      if (errorMessage.includes('unavailable') || errorMessage.includes('contact support')) {
-        // Show crypto payment as alternative
+      if (errorMessage.includes('development mode')) {
+        error('Development Mode', 'PaymentPoint is not available in development. Use crypto payment instead.');
+        // Auto-redirect to crypto payment
         setTimeout(() => {
           setShowManualCryptoModal(true);
         }, 2000);
+      } else {
+        error('Service Unavailable', errorMessage);
+      }
+      
+      // If PaymentPoint is unavailable, show crypto payment as alternative
+      if (errorMessage.includes('unavailable') || errorMessage.includes('contact support') || errorMessage.includes('development mode')) {
+        // Show crypto payment as alternative
+        setTimeout(() => {
+          setShowManualCryptoModal(true);
+        }, 1500);
       }
     } finally {
       setLoading(false);
