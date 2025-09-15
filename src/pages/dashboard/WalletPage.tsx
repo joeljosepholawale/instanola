@@ -7,7 +7,6 @@ import {
   EyeOff,
   DollarSign,
   TrendingUp,
-  CreditCard,
   Bitcoin,
   ArrowRight,
   CheckCircle,
@@ -22,8 +21,6 @@ import { Button } from '../../components/ui/Button';
 import { Card, CardHeader, CardTitle, CardContent } from '../../components/ui/Card';
 import { Loader } from '../../components/ui/Loader';
 import { NOWPaymentModal } from '../../components/ui/NOWPaymentModal';
-import { PaymentModal } from '../../components/ui/PaymentModal';
-import PaymentPointCard from '../../components/ui/PaymentPointCard';
 import { useAuth } from '../../hooks/useAuth';
 import { useToast } from '../../hooks/useToast';
 import { formatCurrency, formatDate } from '../../lib/utils';
@@ -51,7 +48,6 @@ export function WalletPage() {
   const [loading, setLoading] = useState(true);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [showPlisioModal, setShowPlisioModal] = useState(false);
-  const [showPaymentPointModal, setShowPaymentPointModal] = useState(false);
   const [showBalance, setShowBalance] = useState(true);
   const [exchangeRate, setExchangeRate] = useState(1600);
   const [convertingCurrency, setConvertingCurrency] = useState(false);
@@ -245,7 +241,7 @@ export function WalletPage() {
           {/* Balance Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 mb-8">
             {/* USD Balance Card */}
-            <Card className="border-2 border-emerald-200 shadow-2xl bg-white/90 backdrop-blur-sm">
+            <Card className="border-2 border-emerald-200 shadow-2xl bg-white/90 backdrop-blur-sm md:col-span-2">
               <CardContent className="p-4 sm:p-6 md:p-8">
                 <div className="flex items-center justify-between mb-6">
                   <div className="flex items-center space-x-3">
@@ -289,112 +285,13 @@ export function WalletPage() {
                     {serviceStatus === 'degraded' ? 'Try Crypto (Demo)' : 'Add USD with Crypto'}
                     <ArrowRight className="w-5 h-5 ml-2" />
                   </Button>
-                  
-                  <Button
-                    onClick={() => {
-                      setConversionDirection('usd-to-ngn');
-                      setShowConversionModal(true);
-                    }}
-                    variant="outline"
-                    className="w-full border-emerald-200 text-emerald-700 hover:bg-emerald-50"
-                    size="lg"
-                    disabled={balanceUSD <= 0}
-                  >
-                    <ArrowLeftRight className="w-4 h-4 mr-2" />
-                    Convert to Naira
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* NGN Balance Card */}
-            <Card className="border-2 border-amber-200 shadow-2xl bg-white/90 backdrop-blur-sm">
-              <CardContent className="p-4 sm:p-6 md:p-8">
-                <div className="flex items-center justify-between mb-6">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center">
-                      <span className="text-xl font-bold text-amber-600">₦</span>
-                    </div>
-                    <div>
-                      <h3 className="text-lg font-bold text-gray-900">Naira Balance</h3>
-                      <p className="text-sm text-gray-600">Local currency funds</p>
-                    </div>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    onClick={() => setShowBalance(!showBalance)}
-                    className="text-gray-600 hover:text-amber-600"
-                  >
-                    {showBalance ? <Eye className="w-5 h-5" /> : <EyeOff className="w-5 h-5" />}
-                  </Button>
-                </div>
-                
-                <div className="text-center">
-                  <div className="text-5xl font-black text-gray-900 mb-2">
-                    {showBalance ? `₦${balanceNGN.toLocaleString()}` : '••••••'}
-                  </div>
-                  <div className="text-lg text-gray-600">
-                    {showBalance ? `≈ $${(balanceNGN / exchangeRate).toFixed(2)}` : '••••••'}
-                  </div>
-                </div>
-
-                <div className="mt-6 space-y-3">
-                  <Button
-                    onClick={() => setShowPaymentPointModal(true)}
-                    className="w-full bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-700 hover:to-yellow-700 shadow-xl"
-                    size="lg"
-                  >
-                    <CreditCard className="w-5 h-5 mr-2" />
-                    Add Naira
-                    <ArrowRight className="w-5 h-5 ml-2" />
-                  </Button>
-                  
-                  <Button
-                    onClick={() => {
-                      setConversionDirection('ngn-to-usd');
-                      setShowConversionModal(true);
-                    }}
-                    variant="outline"
-                    className="w-full border-amber-200 text-amber-700 hover:bg-amber-50"
-                    size="lg"
-                    disabled={balanceNGN <= 0}
-                  >
-                    <ArrowLeftRight className="w-4 h-4 mr-2" />
-                    Convert to USD
-                  </Button>
                 </div>
               </CardContent>
             </Card>
           </div>
 
           {/* Payment Methods */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-            {/* PaymentPoint Info */}
-            <Card className="border-2 border-green-200 bg-gradient-to-br from-green-50 to-emerald-50">
-              <CardContent className="p-6">
-                <div className="flex items-center space-x-3 mb-4">
-                  <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-                    <CreditCard className="w-5 h-5 text-green-600" />
-                  </div>
-                  <h3 className="text-xl font-bold text-gray-900">PaymentPoint (Naira)</h3>
-                </div>
-                <div className="space-y-3">
-                  <div className="flex items-center space-x-2">
-                    <CheckCircle className="w-4 h-4 text-green-600" />
-                    <span className="text-gray-700">Bank transfer in Nigeria</span>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <CheckCircle className="w-4 h-4 text-green-600" />
-                    <span className="text-gray-700">Instant crediting</span>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <CheckCircle className="w-4 h-4 text-green-600" />
-                    <span className="text-gray-700">Minimum: ₦500</span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
+          <div className="grid grid-cols-1 gap-6 mb-8">
             {/* Plisio Crypto Info */}
             <Card className={`border-2 ${
               serviceStatus === 'degraded' 
@@ -447,11 +344,6 @@ export function WalletPage() {
             </Card>
           </div>
 
-          {/* PaymentPoint Virtual Account */}
-          <div className="mb-8">
-            <PaymentPointCard />
-          </div>
-
           {/* Recent Transactions */}
           <Card className="border-2 border-emerald-200 shadow-xl bg-white/90 backdrop-blur-sm">
             <CardHeader>
@@ -477,11 +369,11 @@ export function WalletPage() {
                   <p className="text-gray-600 mb-6">Your payment history will appear here</p>
                   <div className="flex space-x-4 justify-center">
                     <Button
-                      onClick={() => setShowPaymentPointModal(true)}
-                      className="bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-700 hover:to-yellow-700"
+                      onClick={() => setShowPlisioModal(true)}
+                      className="bg-gradient-to-r from-emerald-600 to-green-700 hover:from-emerald-700 hover:to-green-800"
                     >
-                      <CreditCard className="w-4 h-4 mr-2" />
-                      Add Naira
+                      <Bitcoin className="w-4 h-4 mr-2" />
+                      Add Funds
                     </Button>
                   </div>
                 </div>
@@ -583,17 +475,6 @@ export function WalletPage() {
         onClose={() => setShowPlisioModal(false)}
         onSuccess={handlePlisioPaymentSuccess}
         onError={handlePlisioPaymentError}
-      />
-
-      <PaymentModal
-        isOpen={showPaymentPointModal}
-        onClose={() => setShowPaymentPointModal(false)}
-        onSuccess={(amount) => {
-          fetchBalance();
-          fetchTransactions();
-        }}
-        exchangeRate={exchangeRate}
-        directPaymentPoint={true}
       />
 
       {/* Currency Conversion Modal */}
