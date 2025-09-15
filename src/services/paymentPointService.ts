@@ -1,5 +1,6 @@
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '../lib/firebase';
+import { FirebaseError } from 'firebase/app';
 
 // PaymentPoint Virtual Account Service
 interface PaymentPointVirtualAccountRequest {
@@ -44,6 +45,25 @@ class PaymentPointService {
       return result.data;
     } catch (error) {
       console.error('Error creating PaymentPoint virtual account:', error);
+      
+      // Handle Firebase function deployment issues
+      if (error instanceof FirebaseError) {
+        if (error.code === 'functions/not-found') {
+          throw new Error('PaymentPoint service is currently unavailable. Please contact support or try manual payment instead.');
+        } else if (error.code === 'functions/unauthenticated') {
+          throw new Error('Authentication required. Please log in again.');
+        } else if (error.code === 'functions/permission-denied') {
+          throw new Error('Access denied. Please contact support.');
+        } else if (error.code === 'functions/unavailable') {
+          throw new Error('PaymentPoint service is temporarily unavailable. Please try again later or use manual payment.');
+        }
+      }
+      
+      // Handle network errors
+      if (error instanceof TypeError && error.message.includes('fetch failed')) {
+        throw new Error('PaymentPoint service is currently unavailable. Please try manual payment or contact support.');
+      }
+      
       throw error;
     }
   }

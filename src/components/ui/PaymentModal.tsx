@@ -157,7 +157,16 @@ export function PaymentModal({ isOpen, onClose, onSuccess, exchangeRate, directP
       success('Account Created!', 'Your permanent virtual account has been created');
     } catch (err) {
       console.error('Error creating virtual account:', err);
-      error('Creation Failed', err instanceof Error ? err.message : 'Failed to create virtual account');
+      const errorMessage = err instanceof Error ? err.message : 'Failed to create virtual account';
+      error('Service Unavailable', errorMessage);
+      
+      // If PaymentPoint is unavailable, suggest alternative payment methods
+      if (errorMessage.includes('unavailable') || errorMessage.includes('contact support')) {
+        // Auto-redirect to manual payment as fallback
+        setTimeout(() => {
+          setShowManualModal(true);
+        }, 2000);
+      }
     } finally {
       setLoading(false);
     }
@@ -322,6 +331,15 @@ export function PaymentModal({ isOpen, onClose, onSuccess, exchangeRate, directP
                   </p>
                 </div>
 
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                  <div className="flex items-center space-x-2 text-yellow-800 text-xs">
+                    <AlertCircle className="w-4 h-4" />
+                    <span className="font-medium">Service Notice</span>
+                  </div>
+                  <p className="text-xs text-yellow-700 mt-1">
+                    If PaymentPoint is unavailable, you'll be redirected to manual payment options.
+                  </p>
+                </div>
                 <div className="flex space-x-2">
                   {!directPaymentPoint && (
                     <Button variant="outline" onClick={() => setStep('method')} className="flex-1">
