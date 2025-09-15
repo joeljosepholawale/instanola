@@ -20,7 +20,7 @@ interface PaymentModalProps {
 
 export function PaymentModal({ isOpen, onClose, onSuccess, exchangeRate, directPaymentPoint = false }: PaymentModalProps) {
   const { user } = useAuth();
-  const { success, error } = useToast();
+  const { success, error, warning } = useToast();
   
   const [step, setStep] = useState<'method' | 'profile' | 'paymentpoint' | 'crypto'>('method');
   const [selectedMethod, setSelectedMethod] = useState('');
@@ -151,7 +151,7 @@ export function PaymentModal({ isOpen, onClose, onSuccess, exchangeRate, directP
         if (errorMessage.includes('API keys are not configured') || 
             errorMessage.includes('API Key is missing') || 
             errorMessage.includes('401')) {
-          showError('Service Configuration', 'PaymentPoint API keys need to be configured. Please contact support or use crypto payment instead.');
+          error('Service Configuration', 'PaymentPoint API keys need to be configured. Please contact support or use crypto payment instead.');
           // Auto-redirect to crypto payment after 3 seconds
           setTimeout(() => {
             setShowManualCryptoModal(true);
@@ -164,7 +164,7 @@ export function PaymentModal({ isOpen, onClose, onSuccess, exchangeRate, directP
         }
       }
       
-      showError('PaymentPoint Error', errorMessage);
+      error('PaymentPoint Error', errorMessage);
       
       // Show crypto payment as alternative for configuration issues
       if (errorMessage.includes('API keys') || errorMessage.includes('contact support')) {
