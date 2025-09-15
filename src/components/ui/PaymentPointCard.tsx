@@ -5,6 +5,7 @@ import { Input } from './Input';
 import { useAuth } from '../../hooks/useAuth';
 import { paymentPointService } from '../../services/paymentPointService';
 import { useToast } from '../../hooks/useToast';
+import { functions } from '../../lib/firebase';
 import { 
   Building2, 
   Copy, 
