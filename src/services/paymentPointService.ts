@@ -2,9 +2,6 @@ import { httpsCallable } from 'firebase/functions';
 import { functions } from '../lib/firebase';
 import { FirebaseError } from 'firebase/app';
 
-// Direct API configuration for development
-const PAYMENTPOINT_API_BASE = '/proxynum-paymentpoint-api';
-
 // PaymentPoint Virtual Account Service
 interface PaymentPointVirtualAccountRequest {
   userId: string;
@@ -37,31 +34,12 @@ class PaymentPointService {
     try {
       console.log('Creating PaymentPoint virtual account:', data);
       
-      // Try direct API call first (for development)
+      // Check if Firebase Functions are available
+      if (!functions) {
+        throw new Error('PaymentPoint service is not available in development mode. Please contact support for assistance.');
+      }
+
       try {
-        const response = await fetch(`${PAYMENTPOINT_API_BASE}/api/v1/createVirtualAccount`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(data)
-        });
-
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        const result = await response.json();
-        
-        if (!result.success) {
-          throw new Error(result.message || 'Failed to create virtual account');
-        }
-
-        return result;
-      } catch (fetchError) {
-        console.log('Direct API failed, trying Firebase Functions:', fetchError);
-        
-        // Fallback to Firebase Functions
         const result = await this.createVirtualAccountFunction(data);
         
         if (!result.data.success) {
@@ -69,6 +47,8 @@ class PaymentPointService {
         }
         
         return result.data;
+      } catch (functionError) {
+        throw functionError;
       }
     } catch (error) {
       console.error('Error creating PaymentPoint virtual account:', error);
@@ -76,20 +56,20 @@ class PaymentPointService {
       // Handle Firebase function deployment issues
       if (error instanceof FirebaseError) {
         if (error.code === 'functions/not-found') {
-          throw new Error('PaymentPoint service is not available in development mode. Please contact support.');
+          throw new Error('PaymentPoint service is not deployed. Please contact support for assistance.');
         } else if (error.code === 'functions/unauthenticated') {
           throw new Error('Authentication required. Please log in again.');
         } else if (error.code === 'functions/permission-denied') {
           throw new Error('Access denied. Please contact support.');
         } else if (error.code === 'functions/unavailable') {
-          throw new Error('PaymentPoint service is temporarily unavailable. Please contact support.');
+          throw new Error('PaymentPoint service is temporarily unavailable. Please try again later or contact support.');
         } else if (error.code === 'functions/internal') {
-          throw new Error('PaymentPoint service encountered an error. Please contact support.');
+          throw new Error('PaymentPoint service is experiencing technical difficulties. Please contact support for assistance.');
         }
       }
       
       // Handle network errors
-      if (error instanceof TypeError && error.message.includes('fetch failed')) {
+      if (error instanceof TypeError && (error.message.includes('fetch failed') || error.message.includes('socket hang up'))) {
         throw new Error('PaymentPoint service connection failed. Please contact support.');
       }
       

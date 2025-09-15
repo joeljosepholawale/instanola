@@ -77,38 +77,48 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/proxynum-paymentpoint-api/, ''),
         secure: true,
-        timeout: 10000,
+        timeout: 5000,
         configure: (proxy, options) => {
           proxy.on('error', (err, req, res) => {
-            console.log('PaymentPoint proxy error (this is expected in development):', err.message);
+            console.log('PaymentPoint proxy error (expected in development):', err.message);
             // Send a proper error response instead of letting it hang
             if (!res.headersSent) {
               res.writeHead(503, { 'Content-Type': 'application/json' });
               res.end(JSON.stringify({ 
-                error: 'PaymentPoint API not accessible in development environment',
-                message: 'Please use manual payment method for testing'
+                error: 'PaymentPoint API not accessible in development',
+                message: 'Service requires Firebase Functions deployment'
+              }));
+            }
+          });
+          proxy.on('proxyReqError', (err, req, res) => {
+            console.log('PaymentPoint proxy request error:', err.message);
+            if (!res.headersSent) {
+              res.writeHead(503, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({
+                error: 'PaymentPoint service unavailable',
+                message: 'Please contact support for assistance'
               }));
             }
           });
           proxy.on('proxyRes', (proxyRes, req, res) => {
             // Handle unknown status code 530 from PaymentPoint API
             if (proxyRes.statusCode === 530) {
-              console.log('PaymentPoint API returned status 530, converting to 503');
+              console.log('PaymentPoint API returned status 530');
               res.writeHead(503, { 'Content-Type': 'application/json' });
               res.end(JSON.stringify({
                 error: 'PaymentPoint API service unavailable',
-                message: 'The PaymentPoint service is temporarily unavailable. Please try again later.',
+                message: 'Service temporarily unavailable. Please contact support.',
                 statusCode: 503
               }));
               return;
             }
           });
           proxy.on('proxyReq', (proxyReq, req, res) => {
-            console.log('Attempting PaymentPoint request:', req.url);
+            console.log('PaymentPoint proxy request:', req.url);
             proxyReq.setHeader('User-Agent', 'ProxyNumSMS/1.0');
-            // Set shorter timeout for development
-            proxyReq.setTimeout(5000, () => {
-              console.log('PaymentPoint request timeout (expected in development)');
+            // Set timeout for development
+            proxyReq.setTimeout(3000, () => {
+              console.log('PaymentPoint request timeout');
               proxyReq.destroy();
             });
           });

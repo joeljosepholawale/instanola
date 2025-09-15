@@ -129,21 +129,14 @@ export const PaymentPointCard: React.FC<PaymentPointCardProps> = ({ className })
       } else if (error.code === 'functions/internal' || error.message?.includes('fetch failed')) {
         showError(
           'Service Temporarily Unavailable', 
-          'PaymentPoint service is currently unavailable. Please try manual payment or contact support.'
+          'PaymentPoint service is currently unavailable. Please contact support for assistance.'
         );
       } else if (error.code === 'functions/unauthenticated') {
         showError('Authentication Error', 'Please log out and log back in to try again.');
       } else {
-        showError('Creation Failed', error.message || 'Failed to create virtual account');
+        showError('Service Error', error.message || 'PaymentPoint service is currently unavailable. Please contact support.');
       }
       
-      // Auto-suggest manual payment as alternative
-      setTimeout(() => {
-        if (error.code === 'functions/not-found' || error.code === 'functions/internal') {
-          console.log('Suggesting manual payment as alternative to PaymentPoint');
-          // The error message already suggests manual payment
-        }
-      }, 2000);
     } finally {
       setLoading(false);
     }
