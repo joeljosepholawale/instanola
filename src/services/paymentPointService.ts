@@ -49,6 +49,13 @@ export class PaymentPointService {
    */
   static async createVirtualAccount(data: PaymentPointVirtualAccountRequest): Promise<PaymentPointVirtualAccountResponse> {
     try {
+      // Check if we're in development mode
+      const isDevelopment = import.meta.env.DEV || window.location.hostname === 'localhost';
+      
+      if (isDevelopment) {
+        throw new Error('PaymentPoint is not available in development mode. Firebase Functions with API keys are required for production deployment.');
+      }
+      
       console.log('Creating PaymentPoint virtual account via Firebase Function:', data);
       
       // Check if Firebase Functions are available

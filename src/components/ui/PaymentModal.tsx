@@ -144,7 +144,15 @@ export function PaymentModal({ isOpen, onClose, onSuccess, exchangeRate, directP
       console.error('Error creating virtual account:', err);
       const errorMessage = err instanceof Error ? err.message : 'Failed to create virtual account';
       
-      error('Service Error', errorMessage);
+      if (errorMessage.includes('development mode')) {
+        error('Development Mode', 'PaymentPoint requires production deployment with Firebase Functions. Use crypto payment for testing.');
+        // Auto-redirect to crypto payment in development
+        setTimeout(() => {
+          setShowManualCryptoModal(true);
+        }, 2000);
+      } else {
+        error('Service Error', errorMessage);
+      }
       
       // If PaymentPoint is unavailable, show crypto payment as alternative
       if (errorMessage.includes('unavailable') || errorMessage.includes('contact support') || errorMessage.includes('deployment')) {
