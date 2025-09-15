@@ -25,6 +25,8 @@ export interface Transaction {
   userId: string;
   type: 'deposit' | 'purchase' | 'refund';
   amount: number;
+  amountNGN?: number;
+  currency?: 'USD' | 'NGN';
   status: 'pending' | 'completed' | 'failed';
   paymentMethod: 'paymentpoint' | 'nowpayments';
   createdAt: Date;
@@ -56,4 +58,46 @@ export interface Service {
   name: string;
   price: number;
   available: boolean;
+}
+export interface PaymentPointAccount {
+  userId: string;
+  accountNumber: string;
+  accountName: string;
+  bankName: string;
+  bankCode: string;
+  customerName: string;
+  customerEmail: string;
+  customerPhone?: string;
+  paymentPointCustomerId: string;
+  reservedAccountId: string;
+  createdAt: Date;
+  isActive: boolean;
+  provider: string;
+}
+
+export interface PaymentPointWebhookData {
+  notification_status: string;
+  transaction_id: string;
+  amount_paid: number;
+  settlement_amount: number;
+  settlement_fee: number;
+  transaction_status: string;
+  sender: {
+    name: string;
+    account_number: string;
+    bank: string;
+  };
+  receiver: {
+    name: string;
+    account_number: string;
+    bank: string;
+  };
+  customer: {
+    name: string;
+    email: string;
+    phone?: string;
+    customer_id: string;
+  };
+  description: string;
+  timestamp: string;
 }

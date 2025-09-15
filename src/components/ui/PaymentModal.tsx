@@ -1,31 +1,29 @@
 import React, { useState, useEffect } from 'react';
-import { X, CreditCard, Smartphone, User, Phone, Building, AlertCircle, CheckCircle, Clock } from 'lucide-react';
+import { X, CreditCard, Smartphone, User, Phone, Building, AlertCircle, CheckCircle, Clock, Copy } from 'lucide-react';
 import { Button } from './Button';
 import { Input } from './Input';
 import { Select } from './Select';
 import { Card } from './Card';
+import { Loader } from './Loader';
 import { ManualCryptoPaymentModal } from './ManualCryptoPaymentModal';
-import { paymentPointService } from '../../services/paymentPointService';
+import PaymentPointService from '../../services/paymentPointService';
 import { useAuth } from '../../hooks/useAuth';
 import { useToast } from '../../hooks/useToast';
-import { doc, getDoc } from 'firebase/firestore';
-import { db } from '../../lib/firebase';
 
 interface PaymentModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: (amount: number) => void;
   exchangeRate: number;
-  directPaymentPoint?: boolean; // New prop to skip method selection
+  directPaymentPoint?: boolean;
 }
 
 export function PaymentModal({ isOpen, onClose, onSuccess, exchangeRate, directPaymentPoint = false }: PaymentModalProps) {
   const { user } = useAuth();
   const { success, error } = useToast();
   
-  const [step, setStep] = useState<'method' | 'profile' | 'paymentpoint' | 'manual' | 'crypto'>('method');
+  const [step, setStep] = useState<'method' | 'profile' | 'paymentpoint' | 'crypto'>('method');
   const [selectedMethod, setSelectedMethod] = useState('');
-  const [amount, setAmount] = useState('');
   const [loading, setLoading] = useState(false);
   const [showManualCryptoModal, setShowManualCryptoModal] = useState(false);
   const [hasVirtualAccount, setHasVirtualAccount] = useState(false);
@@ -39,13 +37,12 @@ export function PaymentModal({ isOpen, onClose, onSuccess, exchangeRate, directP
 
   useEffect(() => {
     if (isOpen && user) {
-      checkExistingVirtualAccount();
       resetModal();
+      checkExistingVirtualAccount();
       
       // If directPaymentPoint is true, skip method selection
       if (directPaymentPoint) {
         setSelectedMethod('paymentpoint');
-        // Check if we should go directly to PaymentPoint or profile setup
         checkExistingVirtualAccount().then(() => {
           if (hasVirtualAccount) {
             setStep('paymentpoint');
@@ -61,10 +58,14 @@ export function PaymentModal({ isOpen, onClose, onSuccess, exchangeRate, directP
     if (!user) return;
     
     try {
-      const accountDoc = await getDoc(doc(db, 'paymentpoint_accounts', user.id));
-      if (accountDoc.exists()) {
+      const account = await PaymentPointService.getExistingAccount(user.id);
+      if (account) {
         setHasVirtualAccount(true);
-        setVirtualAccount(accountDoc.data());
+        setVirtualAccount({
+          accountNumber: account.accountNumber,
+          accountName: account.accountName,
+          bankName: account.bankName
+        });
       } else {
         setHasVirtualAccount(false);
         setVirtualAccount(null);
@@ -76,9 +77,10 @@ export function PaymentModal({ isOpen, onClose, onSuccess, exchangeRate, directP
   };
 
   const resetModal = () => {
-    setStep('method');
-    setSelectedMethod('');
-    setAmount('');
+    if (!directPaymentPoint) {
+      setStep('method');
+      setSelectedMethod('');
+    }
     setProfileData({
       name: user?.name || '',
       phone: ''
@@ -110,67 +112,45 @@ export function PaymentModal({ isOpen, onClose, onSuccess, exchangeRate, directP
       return;
     }
 
-    // Validate phone number format (basic validation)
-    const phoneRegex = /^[\+]?[0-9\s\-\(\)]{10,15}$/;
-    if (!phoneRegex.test(profileData.phone)) {
-      error('Invalid Phone', 'Please enter a valid phone number');
+    // Validate phone number format
+    const phoneRegex = /^(\+?234|0)[789]\d{9}$/;
+    if (!phoneRegex.test(profileData.phone.replace(/\s/g, ''))) {
+      error('Invalid Phone', 'Please enter a valid Nigerian phone number');
       return;
     }
 
     try {
       setLoading(true);
       
-      // Create virtual account with PaymentPoint
-      const accountRequest = {
+      console.log('Creating PaymentPoint virtual account...');
+      
+      const result = await PaymentPointService.createVirtualAccount({
         userId: user!.id,
-        amount: 0, // No specific amount for permanent account
-        currency: 'NGN',
-        description: 'ProxyNumSMS Wallet Funding',
-        customerEmail: user!.email,
         customerName: profileData.name,
+        customerEmail: user!.email,
         customerPhone: profileData.phone
-      };
-
-      const result = await paymentPointService.createVirtualAccount(
-        {
-          userId: user!.id,
-          customerEmail: user!.email || '',
-          customerName: profileData.name,
-          customerPhone: profileData.phone
-        }
-      );
-      
-      // Use the account from the result
-      const account = result.account;
-      setVirtualAccount({
-        accountNumber: account.accountNumber,
-        bankName: account.bankName,
-        accountName: account.accountName
       });
-      setHasVirtualAccount(true);
-      setStep('paymentpoint');
       
-      success('Account Created!', 'Your permanent virtual account has been created');
+      if (result.success && result.account) {
+        setVirtualAccount(result.account);
+        setHasVirtualAccount(true);
+        setStep('paymentpoint');
+        
+        success('Account Created!', 'Your PaymentPoint virtual account has been created');
+      } else {
+        error('Creation Failed', result.message || 'Failed to create virtual account');
+      }
     } catch (err) {
       console.error('Error creating virtual account:', err);
       const errorMessage = err instanceof Error ? err.message : 'Failed to create virtual account';
       
-      if (errorMessage.includes('development mode')) {
-        error('Development Mode', 'PaymentPoint is not available in development. Use crypto payment instead.');
-        // Auto-redirect to crypto payment
+      error('Service Error', errorMessage);
+      
+      // If PaymentPoint is unavailable, show crypto payment as alternative
+      if (errorMessage.includes('unavailable') || errorMessage.includes('contact support') || errorMessage.includes('deployment')) {
         setTimeout(() => {
           setShowManualCryptoModal(true);
         }, 2000);
-      } else {
-        error('Service Unavailable', errorMessage);
-      }
-      
-      // If PaymentPoint is unavailable, show crypto payment as alternative
-      if (errorMessage.includes('unavailable') || errorMessage.includes('contact support') || errorMessage.includes('development mode')) {
-        // Show crypto payment as alternative
-        setTimeout(() => {
-          setShowManualCryptoModal(true);
-        }, 1500);
       }
     } finally {
       setLoading(false);
@@ -203,41 +183,43 @@ export function PaymentModal({ isOpen, onClose, onSuccess, exchangeRate, directP
         <div className="bg-white rounded-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
           {/* Header */}
           <div className="flex items-center justify-between p-6 border-b border-gray-200">
-            <h2 className="text-xl font-bold text-gray-900">Add Funds</h2>
+            <h2 className="text-xl font-bold text-gray-900">
+              {directPaymentPoint ? 'PaymentPoint Deposit' : 'Add Funds'}
+            </h2>
             <button onClick={handleClose} className="p-2 hover:bg-gray-100 rounded-lg">
               <X className="w-5 h-5 text-gray-500" />
             </button>
           </div>
 
           {/* Content */}
-          <div className="p-4">
-            {/* Step 1: Payment Method Selection - Skip if directPaymentPoint is true */}
+          <div className="p-6">
+            {/* Step 1: Payment Method Selection */}
             {step === 'method' && !directPaymentPoint && (
-              <div className="space-y-3">
-                <div className="text-center mb-4">
-                  <h3 className="text-base font-semibold text-gray-900 mb-1">Choose Payment Method</h3>
-                  <p className="text-xs text-gray-600">Select how you'd like to add funds to your wallet</p>
+              <div className="space-y-4">
+                <div className="text-center mb-6">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Choose Payment Method</h3>
+                  <p className="text-sm text-gray-600">Select how you'd like to add funds to your wallet</p>
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-3">
                   {/* PaymentPoint Option */}
                   <button
                     onClick={() => handleMethodSelect('paymentpoint')}
-                    className="w-full p-3 border border-gray-200 rounded-lg hover:border-blue-300 hover:bg-blue-50 transition-all text-left"
+                    className="w-full p-4 border border-gray-200 rounded-lg hover:border-green-300 hover:bg-green-50 transition-all text-left"
                   >
-                    <div className="flex items-center space-x-3">
-                      <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
-                        <Building className="w-4 h-4 text-blue-600" />
+                    <div className="flex items-center space-x-4">
+                      <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+                        <Building className="w-5 h-5 text-green-600" />
                       </div>
                       <div className="flex-1">
-                        <h4 className="font-medium text-gray-900 text-sm">PaymentPoint (Recommended)</h4>
-                        <p className="text-xs text-gray-600">Nigerian bank transfer • Instant crediting</p>
+                        <h4 className="font-semibold text-gray-900">PaymentPoint (Recommended)</h4>
+                        <p className="text-sm text-gray-600">Nigerian bank transfer • Instant crediting</p>
                         {hasVirtualAccount && (
                           <p className="text-xs text-green-600 font-medium">✓ Virtual account ready</p>
                         )}
                       </div>
                       <div className="text-right">
-                        <div className="text-xs font-semibold text-green-600">Instant</div>
+                        <div className="text-sm font-semibold text-green-600">Instant</div>
                         <div className="text-xs text-gray-500">2-5 minutes</div>
                       </div>
                     </div>
@@ -246,32 +228,33 @@ export function PaymentModal({ isOpen, onClose, onSuccess, exchangeRate, directP
                   {/* Crypto Payment Option */}
                   <button
                     onClick={() => handleMethodSelect('crypto')}
-                    className="w-full p-3 border border-gray-200 rounded-lg hover:border-purple-300 hover:bg-purple-50 transition-all text-left"
+                    className="w-full p-4 border border-gray-200 rounded-lg hover:border-blue-300 hover:bg-blue-50 transition-all text-left"
                   >
-                    <div className="flex items-center space-x-3">
-                      <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
-                        <CreditCard className="w-4 h-4 text-purple-600" />
+                    <div className="flex items-center space-x-4">
+                      <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                        <CreditCard className="w-5 h-5 text-blue-600" />
                       </div>
                       <div className="flex-1">
-                        <h4 className="font-medium text-gray-900 text-sm">Cryptocurrency</h4>
-                        <p className="text-xs text-gray-600">Bitcoin, Ethereum, TRON • Fast confirmation</p>
+                        <h4 className="font-semibold text-gray-900">Cryptocurrency</h4>
+                        <p className="text-sm text-gray-600">Bitcoin, Ethereum, USDT • Global payments</p>
                       </div>
                       <div className="text-right">
-                        <div className="text-xs font-semibold text-purple-600">5-10 min</div>
+                        <div className="text-sm font-semibold text-blue-600">5-10 min</div>
                         <div className="text-xs text-gray-500">Confirmation</div>
                       </div>
                     </div>
                   </button>
                 </div>
 
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mt-4">
-                  <div className="flex items-center space-x-2 text-blue-800 text-xs">
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-6">
+                  <div className="flex items-center space-x-2 text-blue-800 text-sm">
                     <AlertCircle className="w-4 h-4" />
                     <span className="font-medium">Payment Information</span>
                   </div>
-                  <ul className="text-xs text-blue-700 mt-1 space-y-0.5">
-                    <li>• PaymentPoint: Instant automatic crediting</li>
-                    <li>• Crypto: Fast confirmation after screenshot review</li>
+                  <ul className="text-sm text-blue-700 mt-2 space-y-1">
+                    <li>• PaymentPoint: Instant automatic crediting with 2% fee</li>
+                    <li>• Crypto: Fast confirmation after payment verification</li>
+                    <li>• All payments are secure and encrypted</li>
                   </ul>
                 </div>
               </div>
@@ -279,14 +262,14 @@ export function PaymentModal({ isOpen, onClose, onSuccess, exchangeRate, directP
 
             {/* Step 2: Profile Completion for PaymentPoint */}
             {step === 'profile' && (
-              <div className="space-y-3">
-                <div className="text-center mb-4">
-                  <Building className="w-10 h-10 text-blue-600 mx-auto mb-3" />
-                  <h3 className="text-base font-semibold text-gray-900 mb-1">Complete Your Profile</h3>
-                  <p className="text-xs text-gray-600">We need this information to create your permanent virtual account</p>
+              <div className="space-y-4">
+                <div className="text-center mb-6">
+                  <Building className="w-12 h-12 text-green-600 mx-auto mb-4" />
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Complete Your Profile</h3>
+                  <p className="text-sm text-gray-600">We need this information to create your permanent virtual account</p>
                 </div>
 
-                <div className="space-y-3">
+                <div className="space-y-4">
                   <Input
                     label="Full Name"
                     placeholder="Enter your full name as it appears on your ID"
@@ -297,33 +280,24 @@ export function PaymentModal({ isOpen, onClose, onSuccess, exchangeRate, directP
 
                   <Input
                     label="Phone Number"
-                    placeholder="Enter your phone number (e.g., +234 801 234 5678)"
+                    placeholder="Enter your Nigerian phone number (e.g., +234 801 234 5678)"
                     value={profileData.phone}
                     onChange={(e) => setProfileData(prev => ({ ...prev, phone: e.target.value }))}
                     required
                   />
                 </div>
 
-                <div className="bg-green-50 border border-green-200 rounded-lg p-3">
-                  <div className="flex items-center space-x-2 text-green-800 text-xs">
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                  <div className="flex items-center space-x-2 text-green-800 text-sm">
                     <CheckCircle className="w-4 h-4" />
                     <span className="font-medium">One-time Setup</span>
                   </div>
-                  <p className="text-xs text-green-700 mt-1">
+                  <p className="text-sm text-green-700 mt-1">
                     After this setup, you'll get a permanent virtual account for instant deposits.
                   </p>
                 </div>
 
-                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-                  <div className="flex items-center space-x-2 text-yellow-800 text-xs">
-                    <AlertCircle className="w-4 h-4" />
-                    <span className="font-medium">Service Notice</span>
-                  </div>
-                  <p className="text-xs text-yellow-700 mt-1">
-                    If PaymentPoint is unavailable, you'll be redirected to crypto payment options.
-                  </p>
-                </div>
-                <div className="flex space-x-2">
+                <div className="flex space-x-3">
                   {!directPaymentPoint && (
                     <Button variant="outline" onClick={() => setStep('method')} className="flex-1">
                       Back
@@ -337,9 +311,16 @@ export function PaymentModal({ isOpen, onClose, onSuccess, exchangeRate, directP
                   <Button 
                     onClick={handleProfileSubmit} 
                     disabled={loading || !profileData.name.trim() || !profileData.phone.trim()}
-                    className={directPaymentPoint ? "flex-1" : "flex-1"}
+                    className="flex-1 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800"
                   >
-                    {loading ? 'Creating Account...' : 'Create Virtual Account'}
+                    {loading ? (
+                      <>
+                        <Loader size="sm" className="mr-2" />
+                        Creating...
+                      </>
+                    ) : (
+                      'Create Virtual Account'
+                    )}
                   </Button>
                 </div>
               </div>
@@ -347,66 +328,73 @@ export function PaymentModal({ isOpen, onClose, onSuccess, exchangeRate, directP
 
             {/* Step 3: PaymentPoint Virtual Account Display */}
             {step === 'paymentpoint' && virtualAccount && (
-              <div className="space-y-3">
-                <div className="text-center mb-4">
-                  <Building className="w-10 h-10 text-blue-600 mx-auto mb-3" />
-                  <h3 className="text-base font-semibold text-gray-900 mb-1">Your Virtual Account</h3>
-                  <p className="text-xs text-gray-600">Transfer any amount to this account for instant crediting</p>
+              <div className="space-y-4">
+                <div className="text-center mb-6">
+                  <Building className="w-12 h-12 text-green-600 mx-auto mb-4" />
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Your Virtual Account</h3>
+                  <p className="text-sm text-gray-600">Transfer any amount to this account for instant crediting</p>
                 </div>
 
-                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-3 space-y-3">
+                <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-lg p-4 space-y-4">
                   <div className="text-center">
-                    <h4 className="font-medium text-blue-900 mb-2 text-sm">Bank Transfer Details</h4>
+                    <h4 className="font-semibold text-green-900 mb-3">Bank Transfer Details</h4>
                   </div>
 
-                  <div className="bg-white rounded-lg p-3 space-y-2">
+                  <div className="bg-white rounded-lg p-4 space-y-3 border border-green-100">
                     <div className="flex justify-between items-center">
-                      <span className="text-xs text-gray-600">Bank Name:</span>
-                      <span className="font-medium text-gray-900 text-sm">{virtualAccount.bankName}</span>
+                      <span className="text-sm text-gray-600 font-medium">Bank Name:</span>
+                      <span className="font-semibold text-gray-900">{virtualAccount.bankName}</span>
                     </div>
                     
                     <div className="flex justify-between items-center">
-                      <span className="text-xs text-gray-600">Account Name:</span>
-                      <span className="font-medium text-gray-900 text-sm">{virtualAccount.accountName}</span>
+                      <span className="text-sm text-gray-600 font-medium">Account Name:</span>
+                      <span className="font-semibold text-gray-900">{virtualAccount.accountName}</span>
                     </div>
                     
                     <div className="flex justify-between items-center">
-                      <span className="text-xs text-gray-600">Account Number:</span>
+                      <span className="text-sm text-gray-600 font-medium">Account Number:</span>
                       <div className="flex items-center space-x-2">
-                        <span className="font-mono font-bold text-blue-600 text-sm">{virtualAccount.accountNumber}</span>
+                        <span className="font-mono font-bold text-green-600 text-lg">
+                          {virtualAccount.accountNumber}
+                        </span>
                         <Button
                           variant="ghost"
                           size="sm"
                           onClick={copyAccountNumber}
-                          className="p-1"
+                          className="p-1 hover:bg-green-100"
+                          title="Copy account number"
                         >
-                          <CreditCard className="w-3 h-3" />
+                          <Copy className="w-4 h-4 text-green-600" />
                         </Button>
                       </div>
                     </div>
                   </div>
 
-                  <div className="bg-blue-100 border border-blue-300 rounded-lg p-2">
-                    <div className="flex items-center space-x-2 text-blue-800 text-xs">
+                  <div className="bg-green-100 border border-green-300 rounded-lg p-3">
+                    <div className="flex items-center space-x-2 text-green-800 text-sm mb-2">
                       <Clock className="w-4 h-4" />
-                      <span className="font-medium">Instant Crediting</span>
+                      <span className="font-medium">Instant Processing</span>
                     </div>
-                    <ul className="text-xs text-blue-700 mt-1 space-y-0.5">
+                    <ul className="text-sm text-green-700 space-y-1">
                       <li>• Transfer any amount to this account</li>
                       <li>• Funds appear in your wallet within 2-5 minutes</li>
-                      <li>• No manual approval needed</li>
+                      <li>• 2% transaction fee automatically deducted</li>
                       <li>• Use this same account for all future deposits</li>
+                      <li>• Works with all Nigerian banks and mobile money</li>
                     </ul>
                   </div>
                 </div>
 
-                <div className="flex space-x-2">
+                <div className="flex space-x-3">
                   {!directPaymentPoint && (
                     <Button variant="outline" onClick={() => setStep('method')} className="flex-1">
                       Back
                     </Button>
                   )}
-                  <Button onClick={handleClose} className={directPaymentPoint ? "w-full" : "flex-1"}>
+                  <Button 
+                    onClick={handleClose} 
+                    className={`${directPaymentPoint ? 'w-full' : 'flex-1'} bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800`}
+                  >
                     Done
                   </Button>
                 </div>

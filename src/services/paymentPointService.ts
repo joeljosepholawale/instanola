@@ -1,6 +1,7 @@
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '../lib/firebase';
-import { FirebaseError } from 'firebase/app';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../lib/firebase';
 
 // PaymentPoint Virtual Account Service
 interface PaymentPointVirtualAccountRequest {
@@ -21,8 +22,24 @@ interface PaymentPointVirtualAccountResponse {
   };
 }
 
-class PaymentPointService {
-  private createVirtualAccountFunction = httpsCallable<PaymentPointVirtualAccountRequest, PaymentPointVirtualAccountResponse>(
+interface PaymentPointAccount {
+  userId: string;
+  accountNumber: string;
+  accountName: string;
+  bankName: string;
+  bankCode: string;
+  customerName: string;
+  customerEmail: string;
+  customerPhone?: string;
+  paymentPointCustomerId: string;
+  reservedAccountId: string;
+  createdAt: Date;
+  isActive: boolean;
+  provider: string;
+}
+
+export class PaymentPointService {
+  private static createVirtualAccountFunction = httpsCallable<PaymentPointVirtualAccountRequest, PaymentPointVirtualAccountResponse>(
     functions,
     'createPaymentPointVirtualAccount'
   );
@@ -30,52 +47,59 @@ class PaymentPointService {
   /**
    * Create a PaymentPoint virtual account for the user
    */
-  async createVirtualAccount(data: PaymentPointVirtualAccountRequest): Promise<PaymentPointVirtualAccountResponse> {
+  static async createVirtualAccount(data: PaymentPointVirtualAccountRequest): Promise<PaymentPointVirtualAccountResponse> {
     try {
-      // Check if we're in development environment
-      if (import.meta.env.DEV) {
-        throw new Error('PaymentPoint service is not available in development mode. This feature requires Firebase Functions deployment.');
-      }
-      
-      console.log('Creating PaymentPoint virtual account:', data);
+      console.log('Creating PaymentPoint virtual account via Firebase Function:', data);
       
       // Check if Firebase Functions are available
       if (!functions) {
-        throw new Error('PaymentPoint service is not available in development mode. Please contact support for assistance.');
+        throw new Error('PaymentPoint service requires Firebase Functions deployment. Please contact support.');
       }
 
-      try {
-        const result = await this.createVirtualAccountFunction(data);
+      // Check for existing account first
+      const existingAccountDoc = await getDoc(doc(db, 'paymentpoint_accounts', data.userId));
+      if (existingAccountDoc.exists()) {
+        const accountData = existingAccountDoc.data() as PaymentPointAccount;
+        console.log('Existing PaymentPoint account found:', accountData.accountNumber);
         
-        if (!result.data.success) {
-          throw new Error(result.data.message || 'Failed to create virtual account');
-        }
-        
-        return result.data;
-      } catch (functionError) {
-        throw functionError;
+        return {
+          success: true,
+          message: 'Account already exists',
+          account: {
+            accountNumber: accountData.accountNumber,
+            accountName: accountData.accountName,
+            bankName: accountData.bankName,
+            isPermanent: true
+          }
+        };
       }
+
+      // Create new account via Firebase Function
+      const result = await this.createVirtualAccountFunction(data);
+      
+      if (!result.data.success) {
+        throw new Error(result.data.message || 'Failed to create virtual account');
+      }
+      
+      console.log('PaymentPoint virtual account created successfully:', result.data.account);
+      return result.data;
+      
     } catch (error) {
       console.error('Error creating PaymentPoint virtual account:', error);
       
-      // Handle Firebase function deployment issues
-      if (error instanceof FirebaseError) {
-        if (error.code === 'functions/not-found') {
+      // Handle specific Firebase errors
+      if (error instanceof Error) {
+        if (error.message.includes('functions/not-found')) {
           throw new Error('PaymentPoint service is not deployed. Please contact support for assistance.');
-        } else if (error.code === 'functions/unauthenticated') {
+        } else if (error.message.includes('functions/unauthenticated')) {
           throw new Error('Authentication required. Please log in again.');
-        } else if (error.code === 'functions/permission-denied') {
+        } else if (error.message.includes('functions/permission-denied')) {
           throw new Error('Access denied. Please contact support.');
-        } else if (error.code === 'functions/unavailable') {
-          throw new Error('PaymentPoint service is temporarily unavailable. Please try again later or contact support.');
-        } else if (error.code === 'functions/internal') {
-          throw new Error('PaymentPoint service is experiencing technical difficulties. Please contact support for assistance.');
+        } else if (error.message.includes('functions/unavailable') || error.message.includes('fetch failed')) {
+          throw new Error('PaymentPoint service is temporarily unavailable. Please contact support.');
+        } else if (error.message.includes('functions/internal')) {
+          throw new Error('PaymentPoint service is experiencing technical difficulties. Please contact support.');
         }
-      }
-      
-      // Handle network errors
-      if (error instanceof TypeError && (error.message.includes('fetch failed') || error.message.includes('socket hang up'))) {
-        throw new Error('PaymentPoint service connection failed. Please contact support.');
       }
       
       throw error;
@@ -83,19 +107,37 @@ class PaymentPointService {
   }
 
   /**
+   * Get existing PaymentPoint account for user
+   */
+  static async getExistingAccount(userId: string): Promise<PaymentPointAccount | null> {
+    try {
+      const accountDoc = await getDoc(doc(db, 'paymentpoint_accounts', userId));
+      if (accountDoc.exists()) {
+        const data = accountDoc.data();
+        return {
+          ...data,
+          createdAt: data.createdAt?.toDate() || new Date()
+        } as PaymentPointAccount;
+      }
+      return null;
+    } catch (error) {
+      console.error('Error getting existing PaymentPoint account:', error);
+      return null;
+    }
+  }
+
+  /**
    * Format account number for display
    */
-  formatAccountNumber(accountNumber: string): string {
+  static formatAccountNumber(accountNumber: string): string {
     if (!accountNumber) return '';
-    
-    // Add spacing for better readability
     return accountNumber.replace(/(\d{4})(?=\d)/g, '$1 ');
   }
 
   /**
    * Copy account details to clipboard
    */
-  async copyAccountDetails(account: PaymentPointVirtualAccountResponse['account']): Promise<void> {
+  static async copyAccountDetails(account: PaymentPointVirtualAccountResponse['account']): Promise<void> {
     if (!account) return;
     
     const details = `
@@ -121,7 +163,7 @@ Bank: ${account.bankName}
   /**
    * Validate customer details
    */
-  validateCustomerDetails(data: Partial<PaymentPointVirtualAccountRequest>): string[] {
+  static validateCustomerDetails(data: Partial<PaymentPointVirtualAccountRequest>): string[] {
     const errors: string[] = [];
     
     if (!data.customerName || data.customerName.trim().length < 2) {
@@ -140,5 +182,4 @@ Bank: ${account.bankName}
   }
 }
 
-export const paymentPointService = new PaymentPointService();
-export default paymentPointService;
+export default PaymentPointService;

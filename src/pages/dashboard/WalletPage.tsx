@@ -15,12 +15,16 @@ import {
   Zap,
   ArrowLeftRight,
   X,
-  AlertCircle
+  AlertCircle,
+  Building2,
+  Banknote
 } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { Card, CardHeader, CardTitle, CardContent } from '../../components/ui/Card';
 import { Loader } from '../../components/ui/Loader';
 import { NOWPaymentModal } from '../../components/ui/NOWPaymentModal';
+import { PaymentPointCard } from '../../components/ui/PaymentPointCard';
+import { PaymentModal } from '../../components/ui/PaymentModal';
 import { useAuth } from '../../hooks/useAuth';
 import { useToast } from '../../hooks/useToast';
 import { formatCurrency, formatDate } from '../../lib/utils';
@@ -45,9 +49,11 @@ export function WalletPage() {
   
   const [balanceUSD, setBalanceUSD] = useState(0);
   const [balanceNGN, setBalanceNGN] = useState(0);
+  const [balanceNGN, setBalanceNGN] = useState(0);
   const [loading, setLoading] = useState(true);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [showPlisioModal, setShowPlisioModal] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showBalance, setShowBalance] = useState(true);
   const [exchangeRate, setExchangeRate] = useState(1600);
   const [convertingCurrency, setConvertingCurrency] = useState(false);
@@ -68,6 +74,7 @@ export function WalletPage() {
           const userData = doc.data();
           setBalanceUSD(userData.walletBalance || 0);
           setBalanceNGN(userData.walletBalanceNGN || 0);
+          setBalanceNGN(userData.walletBalanceNGN || 0);
         }
       });
       
@@ -82,6 +89,7 @@ export function WalletPage() {
       if (userDoc.exists()) {
         const userData = userDoc.data();
         setBalanceUSD(userData.walletBalance || 0);
+        setBalanceNGN(userData.walletBalanceNGN || 0);
         setBalanceNGN(userData.walletBalanceNGN || 0);
       }
     } catch (error) {
@@ -112,11 +120,45 @@ export function WalletPage() {
   };
 
   const loadExchangeRate = async () => {
+    // Check cache first
+    const cacheKey = 'exchange_rate_cache';
+    const cached = localStorage.getItem(cacheKey);
+    
+    if (cached) {
+      try {
+        const { rate, timestamp } = JSON.parse(cached);
+        const now = Date.now();
+        const oneHour = 60 * 60 * 1000;
+        
+        if (now - timestamp < oneHour) {
+          setExchangeRate(rate);
+          return;
+        }
+      } catch (error) {
+        console.warn('Invalid exchange rate cache');
+      }
+    }
+    
     try {
-      const response = await fetch('https://api.exchangerate-api.com/v4/latest/USD');
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3000);
+      
+      const response = await fetch('https://api.exchangerate-api.com/v4/latest/USD', {
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+      
       const data = await response.json();
-      setExchangeRate(data.rates.NGN || 1600);
+      const rate = data.rates.NGN || 1600;
+      setExchangeRate(rate);
+      
+      // Cache for 1 hour
+      localStorage.setItem(cacheKey, JSON.stringify({
+        rate,
+        timestamp: Date.now()
+      }));
     } catch (error) {
+      console.warn('Failed to load exchange rate, using fallback');
       setExchangeRate(1600);
     }
   };
@@ -187,6 +229,15 @@ export function WalletPage() {
     error('Payment Error', errorMessage);
   };
 
+  const handlePaymentPointSuccess = (amount: number) => {
+    fetchBalance();
+    fetchTransactions();
+    success('Payment Successful', `₦${amount.toLocaleString()} has been added to your wallet`);
+  };
+
+  const formatNaira = (amount: number) => {
+    return `₦${amount.toLocaleString('en-NG', { maximumFractionDigits: 0 })}`;
+  };
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-emerald-50 to-amber-50 flex items-center justify-center">
@@ -241,7 +292,7 @@ export function WalletPage() {
           {/* Balance Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 mb-8">
             {/* USD Balance Card */}
-            <Card className="border-2 border-emerald-200 shadow-2xl bg-white/90 backdrop-blur-sm md:col-span-2">
+            <Card className="border-2 border-emerald-200 shadow-2xl bg-white/90 backdrop-blur-sm">
               <CardContent className="p-4 sm:p-6 md:p-8">
                 <div className="flex items-center justify-between mb-6">
                   <div className="flex items-center space-x-3">
@@ -288,10 +339,72 @@ export function WalletPage() {
                 </div>
               </CardContent>
             </Card>
+
+            {/* NGN Balance Card */}
+            <Card className="border-2 border-green-200 shadow-2xl bg-white/90 backdrop-blur-sm">
+              <CardContent className="p-4 sm:p-6 md:p-8">
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
+                      <Banknote className="w-6 h-6 text-green-600" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-bold text-gray-900">NGN Balance</h3>
+                      <p className="text-sm text-gray-600">Nigerian Naira</p>
+                    </div>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    onClick={() => setShowBalance(!showBalance)}
+                    className="text-gray-600 hover:text-green-600"
+                  >
+                    {showBalance ? <Eye className="w-5 h-5" /> : <EyeOff className="w-5 h-5" />}
+                  </Button>
+                </div>
+                
+                <div className="text-center">
+                  <div className="text-5xl font-black text-gray-900 mb-2">
+                    {showBalance ? formatNaira(balanceNGN) : '••••••'}
+                  </div>
+                  <div className="text-lg text-gray-600">
+                    {showBalance ? `≈ $${(balanceNGN / exchangeRate).toFixed(2)}` : '••••••'}
+                  </div>
+                </div>
+
+                <div className="mt-6 space-y-3">
+                  <Button
+                    onClick={() => setShowPaymentModal(true)}
+                    className="w-full bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 shadow-xl transition-all duration-300"
+                    size="lg"
+                  >
+                    <Building2 className="w-5 h-5 mr-2" />
+                    Add NGN with Bank Transfer
+                    <ArrowRight className="w-5 h-5 ml-2" />
+                  </Button>
+                  
+                  {balanceNGN > 0 && balanceUSD < 1 && (
+                    <Button
+                      onClick={() => {
+                        setConversionDirection('ngn-to-usd');
+                        setShowConversionModal(true);
+                      }}
+                      variant="outline"
+                      className="w-full border-green-300 text-green-700 hover:bg-green-50"
+                    >
+                      <ArrowLeftRight className="w-4 h-4 mr-2" />
+                      Convert to USD
+                    </Button>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
           </div>
 
           {/* Payment Methods */}
-          <div className="grid grid-cols-1 gap-6 mb-8">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+            {/* PaymentPoint Card */}
+            <PaymentPointCard />
+
             {/* Plisio Crypto Info */}
             <Card className={`border-2 ${
               serviceStatus === 'degraded' 
@@ -369,11 +482,18 @@ export function WalletPage() {
                   <p className="text-gray-600 mb-6">Your payment history will appear here</p>
                   <div className="flex space-x-4 justify-center">
                     <Button
+                      onClick={() => setShowPaymentModal(true)}
+                      className="bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800"
+                    >
+                      <Building2 className="w-4 h-4 mr-2" />
+                      Add NGN
+                    </Button>
+                    <Button
                       onClick={() => setShowPlisioModal(true)}
                       className="bg-gradient-to-r from-emerald-600 to-green-700 hover:from-emerald-700 hover:to-green-800"
                     >
                       <Bitcoin className="w-4 h-4 mr-2" />
-                      Add Funds
+                      Add USD
                     </Button>
                   </div>
                 </div>
@@ -399,9 +519,17 @@ export function WalletPage() {
                         </div>
                         <div>
                           <p className="font-bold text-gray-900 text-lg">
-                            {transaction.description}
+                            {(() => {
+                              let desc = transaction.description || 'Transaction';
+                              desc = desc.replace(/<[^>]*>/g, '');
+                              desc = desc.replace(/window\.__sb_state[^"]*"[^"]*"/g, '');
+                              return desc.length > 40 ? desc.substring(0, 40) + '...' : desc;
+                            })()}
                           </p>
                           <p className="text-sm text-gray-500">{formatDate(transaction.date)}</p>
+                          {transaction.currency === 'NGN' && (
+                            <p className="text-xs text-green-600 font-medium">Nigerian Naira</p>
+                          )}
                         </div>
                       </div>
                       <div className="text-right">
@@ -411,7 +539,10 @@ export function WalletPage() {
                             : 'text-gray-900'
                         }`}>
                           {transaction.type === 'deposit' || transaction.type === 'refund' ? '+' : '-'}
-                          {formatCurrency(Math.abs(transaction.amount))}
+                          {transaction.currency === 'NGN' 
+                            ? formatNaira(Math.abs(transaction.amountNGN || transaction.amount))
+                            : formatCurrency(Math.abs(transaction.amount))
+                          }
                         </p>
                         <div className={`text-sm px-2 py-1 rounded-full inline-block ${
                           transaction.status === 'completed' 
@@ -470,6 +601,14 @@ export function WalletPage() {
       </div>
 
       {/* Payment Modals */}
+      <PaymentModal
+        isOpen={showPaymentModal}
+        onClose={() => setShowPaymentModal(false)}
+        onSuccess={handlePaymentPointSuccess}
+        exchangeRate={exchangeRate}
+        directPaymentPoint={true}
+      />
+
       <NOWPaymentModal
         isOpen={showPlisioModal}
         onClose={() => setShowPlisioModal(false)}
@@ -509,23 +648,47 @@ export function WalletPage() {
                 </p>
               </div>
 
+              <div className="flex space-x-2 mb-4">
+                <Button
+                  variant={conversionDirection === 'usd-to-ngn' ? 'primary' : 'outline'}
+                  onClick={() => setConversionDirection('usd-to-ngn')}
+                  className="flex-1"
+                  size="sm"
+                >
+                  USD → NGN
+                </Button>
+                <Button
+                  variant={conversionDirection === 'ngn-to-usd' ? 'primary' : 'outline'}
+                  onClick={() => setConversionDirection('ngn-to-usd')}
+                  className="flex-1"
+                  size="sm"
+                >
+                  NGN → USD
+                </Button>
+              </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Amount to Convert
                 </label>
                 <div className="relative">
+                  <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 font-medium">
+                    {conversionDirection === 'usd-to-ngn' ? '$' : '₦'}
+                  </span>
                   <input
                     type="number"
                     value={conversionAmount}
                     onChange={(e) => setConversionAmount(e.target.value)}
                     placeholder={`Enter ${conversionDirection === 'usd-to-ngn' ? 'USD' : 'NGN'} amount`}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    className="w-full pl-8 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
                     min="0"
                     step="0.01"
                   />
-                  <div className="absolute right-3 top-3 text-gray-500">
-                    {conversionDirection === 'usd-to-ngn' ? 'USD' : 'NGN'}
-                  </div>
+                </div>
+                <div className="mt-1 text-xs text-gray-500">
+                  Available: {conversionDirection === 'usd-to-ngn' 
+                    ? `$${balanceUSD.toFixed(2)}` 
+                    : formatNaira(balanceNGN)
+                  }
                 </div>
               </div>
 
@@ -541,6 +704,16 @@ export function WalletPage() {
                 </div>
               )}
 
+              {conversionAmount && parseFloat(conversionAmount) > 0 && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                  <div className="text-xs text-blue-800">
+                    <p className="font-medium">Conversion Details:</p>
+                    <p>• No conversion fees</p>
+                    <p>• Instant conversion</p>
+                    <p>• Rate: 1 USD = ₦{exchangeRate.toLocaleString()}</p>
+                  </div>
+                </div>
+              )}
               <div className="flex space-x-3">
                 <Button
                   variant="outline"
@@ -551,7 +724,13 @@ export function WalletPage() {
                 </Button>
                 <Button
                   onClick={handleCurrencyConversion}
-                  disabled={convertingCurrency || !conversionAmount || parseFloat(conversionAmount) <= 0}
+                  disabled={
+                    convertingCurrency || 
+                    !conversionAmount || 
+                    parseFloat(conversionAmount) <= 0 ||
+                    (conversionDirection === 'usd-to-ngn' && parseFloat(conversionAmount) > balanceUSD) ||
+                    (conversionDirection === 'ngn-to-usd' && parseFloat(conversionAmount) > balanceNGN)
+                  }
                   className="flex-1 bg-gradient-to-r from-emerald-600 to-green-700"
                 >
                   {convertingCurrency ? 'Converting...' : 'Convert'}

@@ -2,10 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from './Card';
 import { Button } from './Button';
 import { Input } from './Input';
+import { Loader } from './Loader';
 import { useAuth } from '../../hooks/useAuth';
-import { paymentPointService } from '../../services/paymentPointService';
 import { useToast } from '../../hooks/useToast';
-import { functions } from '../../lib/firebase';
+import PaymentPointService from '../../services/paymentPointService';
 import { 
   Building2, 
   Copy, 
@@ -14,8 +14,10 @@ import {
   EyeOff,
   CheckCircle,
   AlertCircle,
-  Loader2,
-  Info
+  Info,
+  Clock,
+  Shield,
+  Banknote
 } from 'lucide-react';
 
 interface PaymentPointAccount {
@@ -27,40 +29,58 @@ interface PaymentPointAccount {
 
 interface PaymentPointCardProps {
   className?: string;
+  onAccountCreated?: (account: PaymentPointAccount) => void;
 }
 
-export const PaymentPointCard: React.FC<PaymentPointCardProps> = ({ className }) => {
+export function PaymentPointCard({ className, onAccountCreated }: PaymentPointCardProps) {
   const { user } = useAuth();
   const { success, error: showError } = useToast();
   const [account, setAccount] = useState<PaymentPointAccount | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [creating, setCreating] = useState(false);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [showAccountDetails, setShowAccountDetails] = useState(false);
   
   // Form state
   const [formData, setFormData] = useState({
-    customerName: user?.displayName || '',
+    customerName: user?.name || '',
     customerEmail: user?.email || '',
     customerPhone: ''
   });
   const [formErrors, setFormErrors] = useState<string[]>([]);
 
-  // Check for existing account on component mount
   useEffect(() => {
-    checkExistingAccount();
+    if (user) {
+      checkExistingAccount();
+    }
   }, [user]);
 
-  const checkExistingAccount = () => {
+  const checkExistingAccount = async () => {
     if (!user) return;
-
-    // Check if we're in development environment
-    if (import.meta.env.DEV) {
-      setShowCreateForm(false);
-      return;
-    }
     
-    // Show the create form if not in development
-    setShowCreateForm(true);
+    try {
+      setLoading(true);
+      const existingAccount = await PaymentPointService.getExistingAccount(user.id);
+      
+      if (existingAccount) {
+        setAccount({
+          accountNumber: existingAccount.accountNumber,
+          accountName: existingAccount.accountName,
+          bankName: existingAccount.bankName,
+          isPermanent: true
+        });
+        setShowAccountDetails(true);
+        console.log('Existing PaymentPoint account loaded:', existingAccount.accountNumber);
+      } else {
+        setShowCreateForm(true);
+        console.log('No existing PaymentPoint account found');
+      }
+    } catch (err) {
+      console.error('Error checking existing account:', err);
+      setShowCreateForm(true);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -82,32 +102,19 @@ export const PaymentPointCard: React.FC<PaymentPointCardProps> = ({ className })
     }
 
     // Validate form
-    const errors = paymentPointService.validateCustomerDetails(formData);
+    const errors = PaymentPointService.validateCustomerDetails(formData);
     if (errors.length > 0) {
       setFormErrors(errors);
       return;
     }
 
     try {
-      setLoading(true);
+      setCreating(true);
       setFormErrors([]);
 
-      // Check if Firebase Functions are available
-      if (!functions) {
-        console.warn('Firebase Functions not available in development environment');
-        showError(
-          'Service Unavailable', 
-          'PaymentPoint service is not available in development mode. Please use manual payment options instead.'
-        );
-        
-        // Auto-redirect to manual payment after showing error
-        setTimeout(() => {
-          setShowCreateForm(false);
-          // You can trigger manual payment modal here if needed
-        }, 3000);
-        return;
-      }
-      const result = await paymentPointService.createVirtualAccount({
+      console.log('Creating PaymentPoint virtual account for user:', user.id);
+
+      const result = await PaymentPointService.createVirtualAccount({
         userId: user.id,
         customerName: formData.customerName,
         customerEmail: formData.customerEmail,
@@ -118,32 +125,21 @@ export const PaymentPointCard: React.FC<PaymentPointCardProps> = ({ className })
         setAccount(result.account);
         setShowCreateForm(false);
         setShowAccountDetails(true);
-        success('Account Created', 'PaymentPoint virtual account created successfully!');
+        
+        success('Account Created!', 'Your PaymentPoint virtual account has been created successfully');
+        
+        // Notify parent component
+        if (onAccountCreated) {
+          onAccountCreated(result.account);
+        }
       } else {
         showError('Creation Failed', result.message || 'Failed to create virtual account');
       }
     } catch (error: any) {
       console.error('Error creating PaymentPoint account:', error);
-      
-      // Handle specific Firebase errors
-      if (error.code === 'functions/not-found') {
-        showError(
-          'Service Not Available', 
-          'PaymentPoint service is not deployed. Please use manual payment options or contact support.'
-        );
-      } else if (error.code === 'functions/internal' || error.message?.includes('fetch failed')) {
-        showError(
-          'Service Temporarily Unavailable', 
-          'PaymentPoint service is currently unavailable. Please contact support for assistance.'
-        );
-      } else if (error.code === 'functions/unauthenticated') {
-        showError('Authentication Error', 'Please log out and log back in to try again.');
-      } else {
-        showError('Service Error', error.message || 'PaymentPoint service is currently unavailable. Please contact support.');
-      }
-      
+      showError('Service Error', error.message || 'PaymentPoint service is currently unavailable');
     } finally {
-      setLoading(false);
+      setCreating(false);
     }
   };
 
@@ -151,8 +147,8 @@ export const PaymentPointCard: React.FC<PaymentPointCardProps> = ({ className })
     if (!account) return;
     
     try {
-      await paymentPointService.copyAccountDetails(account);
-      success('Copied!', 'Account details copied to clipboard!');
+      await PaymentPointService.copyAccountDetails(account);
+      success('Copied!', 'Account details copied to clipboard');
     } catch (error) {
       showError('Copy Failed', 'Failed to copy account details');
     }
@@ -162,14 +158,11 @@ export const PaymentPointCard: React.FC<PaymentPointCardProps> = ({ className })
     setShowAccountDetails(!showAccountDetails);
   };
 
-  if (loading && !account && !showCreateForm) {
+  if (loading) {
     return (
       <Card className={className}>
         <CardContent className="flex items-center justify-center py-8">
-          <div className="flex items-center space-x-2">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            <span>Loading PaymentPoint account...</span>
-          </div>
+          <Loader size="md" text="Loading PaymentPoint account..." />
         </CardContent>
       </Card>
     );
@@ -181,46 +174,25 @@ export const PaymentPointCard: React.FC<PaymentPointCardProps> = ({ className })
         <CardTitle className="flex items-center space-x-2">
           <Building2 className="h-5 w-5 text-green-600" />
           <span>PaymentPoint Virtual Account</span>
-          <span className="bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs">
+          <span className="bg-green-100 text-green-700 px-2 py-1 rounded text-xs font-medium">
             Nigerian Banks
           </span>
         </CardTitle>
       </CardHeader>
       
       <CardContent className="space-y-4">
-        {/* Development Mode Notice */}
-        {import.meta.env.DEV && (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-            <div className="flex items-start space-x-2">
-              <AlertCircle className="h-4 w-4 text-yellow-600 mt-0.5" />
-              <div className="text-sm text-yellow-800">
-                <p className="font-medium">Development Mode</p>
-                <p>PaymentPoint service requires Firebase Functions deployment. Use crypto payment for testing.</p>
+        {/* Service Info */}
+        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+          <div className="flex items-start space-x-3">
+            <Info className="h-5 w-5 text-green-600 mt-0.5" />
+            <div className="text-sm text-green-800">
+              <p className="font-medium mb-1">Instant Bank Transfer Deposits</p>
+              <div className="space-y-1 text-xs">
+                <p>• Transfer from any Nigerian bank</p>
+                <p>• Funds credited within 2-5 minutes</p>
+                <p>• 2% transaction fee applied</p>
+                <p>• Permanent virtual account</p>
               </div>
-            </div>
-          </div>
-        )}
-        
-        {/* Account Status Info */}
-        <div className={`border rounded-lg p-3 ${
-          import.meta.env.DEV 
-            ? 'bg-gray-50 border-gray-200' 
-            : 'bg-green-50 border-green-200'
-        }`}>
-          <div className="flex items-start space-x-2">
-            <Info className={`h-4 w-4 mt-0.5 ${
-              import.meta.env.DEV ? 'text-gray-600' : 'text-green-600'
-            }`} />
-            <div className={`text-sm ${
-              import.meta.env.DEV ? 'text-gray-800' : 'text-green-800'
-            }`}>
-              <p className="font-medium">Bank Transfer Deposits</p>
-              <p>
-                {import.meta.env.DEV 
-                  ? 'Available in production. Use crypto payment for development testing.'
-                  : 'Transfer money from any Nigerian bank to your virtual account. Funds appear instantly with a 2% fee.'
-                }
-              </p>
             </div>
           </div>
         </div>
@@ -230,8 +202,8 @@ export const PaymentPointCard: React.FC<PaymentPointCardProps> = ({ className })
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-2">
-                <CheckCircle className="h-4 w-4 text-green-600" />
-                <span className="text-sm font-medium text-green-700">Account Active</span>
+                <CheckCircle className="h-5 w-5 text-green-600" />
+                <span className="text-sm font-medium text-green-700">Virtual Account Active</span>
               </div>
               <Button
                 variant="ghost"
@@ -247,63 +219,75 @@ export const PaymentPointCard: React.FC<PaymentPointCardProps> = ({ className })
                 ) : (
                   <>
                     <Eye className="h-4 w-4 mr-1" />
-                    Show
+                    Show Details
                   </>
                 )}
               </Button>
             </div>
 
             {showAccountDetails && (
-              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 space-y-3">
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Account Name</label>
-                  <p className="text-sm font-mono bg-white border rounded px-2 py-1">
-                    {account.accountName}
-                  </p>
-                </div>
-                
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Account Number</label>
-                  <p className="text-sm font-mono bg-white border rounded px-2 py-1">
-                    {paymentPointService.formatAccountNumber(account.accountNumber)}
-                  </p>
-                </div>
-                
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Bank Name</label>
-                  <p className="text-sm font-mono bg-white border rounded px-2 py-1">
-                    {account.bankName}
-                  </p>
+              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-4 space-y-3">
+                <div className="text-center mb-3">
+                  <h4 className="font-semibold text-blue-900 text-sm">Bank Transfer Details</h4>
+                  <p className="text-xs text-blue-700">Use these details for all future deposits</p>
                 </div>
 
-                <Button
-                  onClick={handleCopyDetails}
-                  className="w-full mt-3"
-                  variant="outline"
-                  size="sm"
-                >
-                  <Copy className="h-4 w-4 mr-2" />
-                  Copy Account Details
-                </Button>
-              </div>
-            )}
-            {error.includes('service') && (
-              <div className="mt-2 text-xs text-red-500">
-                Redirecting to manual payment options in 3 seconds...
+                <div className="bg-white rounded-lg p-3 space-y-3 border border-blue-100">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-gray-600 font-medium">Bank Name:</span>
+                    <span className="font-semibold text-gray-900 text-sm">{account.bankName}</span>
+                  </div>
+                  
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-gray-600 font-medium">Account Name:</span>
+                    <span className="font-semibold text-gray-900 text-sm">{account.accountName}</span>
+                  </div>
+                  
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-gray-600 font-medium">Account Number:</span>
+                    <div className="flex items-center space-x-2">
+                      <span className="font-mono font-bold text-blue-600 text-sm">
+                        {PaymentPointService.formatAccountNumber(account.accountNumber)}
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleCopyDetails}
+                        className="p-1 hover:bg-blue-100"
+                        title="Copy account details"
+                      >
+                        <Copy className="w-3 h-3 text-blue-600" />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-blue-100 border border-blue-300 rounded-lg p-3">
+                  <div className="flex items-center space-x-2 text-blue-800 text-xs mb-2">
+                    <Clock className="w-4 h-4" />
+                    <span className="font-medium">How to Use</span>
+                  </div>
+                  <ul className="text-xs text-blue-700 space-y-1">
+                    <li>• Transfer any amount to this account</li>
+                    <li>• Funds appear in your wallet within 2-5 minutes</li>
+                    <li>• No manual approval needed</li>
+                    <li>• Use this same account for all future deposits</li>
+                  </ul>
+                </div>
               </div>
             )}
           </div>
         )}
 
         {/* Create Account Form */}
-        {showCreateForm && (
-          <form onSubmit={handleCreateAccount} className="space-y-4">
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-              <div className="flex items-start space-x-2">
-                <CreditCard className="h-4 w-4 text-blue-600 mt-0.5" />
+        {showCreateForm && !account && (
+          <div className="space-y-4">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div className="flex items-start space-x-3">
+                <CreditCard className="h-5 w-5 text-blue-600 mt-0.5" />
                 <div className="text-sm text-blue-800">
-                  <p className="font-medium">Create Your Virtual Account</p>
-                  <p>Enter your details to create a permanent virtual account for bank transfers.</p>
+                  <p className="font-medium mb-1">Create Your Virtual Account</p>
+                  <p>Get a permanent Nigerian bank account for instant deposits</p>
                 </div>
               </div>
             </div>
@@ -315,7 +299,7 @@ export const PaymentPointCard: React.FC<PaymentPointCardProps> = ({ className })
                   <AlertCircle className="h-4 w-4 text-red-600 mt-0.5" />
                   <div className="text-sm text-red-800">
                     <p className="font-medium">Please fix the following errors:</p>
-                    <ul className="list-disc list-inside mt-1">
+                    <ul className="list-disc list-inside mt-1 space-y-1">
                       {formErrors.map((error, index) => (
                         <li key={index}>{error}</li>
                       ))}
@@ -325,80 +309,99 @@ export const PaymentPointCard: React.FC<PaymentPointCardProps> = ({ className })
               </div>
             )}
 
-            <div className="space-y-3">
-              <div>
-                <label htmlFor="customerName" className="block text-sm font-medium text-gray-700 mb-1">Full Name *</label>
-                <Input
-                  id="customerName"
-                  name="customerName"
-                  type="text"
-                  value={formData.customerName}
-                  onChange={handleInputChange}
-                  placeholder="Enter your full name"
-                  required
-                />
+            <form onSubmit={handleCreateAccount} className="space-y-4">
+              <Input
+                label="Full Name *"
+                name="customerName"
+                type="text"
+                value={formData.customerName}
+                onChange={handleInputChange}
+                placeholder="Enter your full name as it appears on your ID"
+                required
+              />
+
+              <Input
+                label="Email Address *"
+                name="customerEmail"
+                type="email"
+                value={formData.customerEmail}
+                onChange={handleInputChange}
+                placeholder="Enter your email address"
+                required
+              />
+
+              <Input
+                label="Phone Number (Optional)"
+                name="customerPhone"
+                type="tel"
+                value={formData.customerPhone}
+                onChange={handleInputChange}
+                placeholder="+234 801 234 5678"
+              />
+
+              <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                <div className="flex items-center space-x-2 text-green-800 text-xs mb-2">
+                  <Shield className="w-4 h-4" />
+                  <span className="font-medium">Security & Privacy</span>
+                </div>
+                <ul className="text-xs text-green-700 space-y-1">
+                  <li>• Your information is encrypted and secure</li>
+                  <li>• Account is permanent and reusable</li>
+                  <li>• Only you can access this account</li>
+                  <li>• Compliant with Nigerian banking regulations</li>
+                </ul>
               </div>
 
-              <div>
-                <label htmlFor="customerEmail" className="block text-sm font-medium text-gray-700 mb-1">Email Address *</label>
-                <Input
-                  id="customerEmail"
-                  name="customerEmail"
-                  type="email"
-                  value={formData.customerEmail}
-                  onChange={handleInputChange}
-                  placeholder="Enter your email address"
-                  required
-                />
-              </div>
+              <Button
+                type="submit"
+                className="w-full bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800"
+                disabled={creating}
+                size="lg"
+              >
+                {creating ? (
+                  <>
+                    <Loader size="sm" className="mr-2" />
+                    Creating Account...
+                  </>
+                ) : (
+                  <>
+                    <Building2 className="h-5 w-5 mr-2" />
+                    Create Virtual Account
+                  </>
+                )}
+              </Button>
+            </form>
+          </div>
+        )}
 
-              <div>
-                <label htmlFor="customerPhone" className="block text-sm font-medium text-gray-700 mb-1">Phone Number (Optional)</label>
-                <Input
-                  id="customerPhone"
-                  name="customerPhone"
-                  type="tel"
-                  value={formData.customerPhone}
-                  onChange={handleInputChange}
-                  placeholder="080XXXXXXXX"
-                />
-              </div>
+        {/* Benefits */}
+        <div className="bg-gradient-to-r from-gray-50 to-blue-50 border border-gray-200 rounded-lg p-4">
+          <h4 className="font-medium text-gray-900 mb-3 flex items-center">
+            <Banknote className="w-4 h-4 mr-2 text-green-600" />
+            PaymentPoint Benefits
+          </h4>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs text-gray-700">
+            <div className="flex items-center space-x-2">
+              <CheckCircle className="w-3 h-3 text-green-600" />
+              <span>Instant automatic crediting</span>
             </div>
-
-            <Button
-              type="submit"
-              className="w-full"
-              disabled={loading}
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Creating Account...
-                </>
-              ) : (
-                <>
-                  <Building2 className="h-4 w-4 mr-2" />
-                  Create Virtual Account
-                </>
-              )}
-            </Button>
-          </form>
-        )}
-
-        {/* Show Create Form Button */}
-        {!account && !showCreateForm && !import.meta.env.DEV && (
-          <Button
-            onClick={() => setShowCreateForm(true)}
-            className="w-full"
-            variant="outline"
-          >
-            <Building2 className="h-4 w-4 mr-2" />
-            Create PaymentPoint Account
-          </Button>
-        )}
+            <div className="flex items-center space-x-2">
+              <CheckCircle className="w-3 h-3 text-green-600" />
+              <span>Works with all Nigerian banks</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <CheckCircle className="w-3 h-3 text-green-600" />
+              <span>No manual approval needed</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <CheckCircle className="w-3 h-3 text-green-600" />
+              <span>Permanent account number</span>
+            </div>
+          </div>
+        </div>
       </CardContent>
     </Card>
   );
-};
+}
 
 export default PaymentPointCard;
