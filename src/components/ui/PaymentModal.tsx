@@ -148,14 +148,16 @@ export function PaymentModal({ isOpen, onClose, onSuccess, exchangeRate, directP
         errorMessage = err.message;
         
         // Handle specific PaymentPoint errors
-        if (errorMessage.includes('API keys are not configured') || 
+        if (errorMessage.includes('API credentials are not properly configured') ||
+            errorMessage.includes('API keys are not configured') || 
             errorMessage.includes('API Key is missing') || 
-            errorMessage.includes('401')) {
-          error('Service Configuration', 'PaymentPoint API keys need to be configured. Please contact support or use crypto payment instead.');
+            errorMessage.includes('401') ||
+            errorMessage.includes('Unauthorized')) {
+          error('Service Configuration', 'PaymentPoint service is not properly configured. Please contact admin to set up the API keys, or use crypto payment instead.');
           // Auto-redirect to crypto payment after 3 seconds
           setTimeout(() => {
             setShowManualCryptoModal(true);
-          }, 3000);
+          }, 2000);
           return;
         } else if (errorMessage.includes('403') || errorMessage.includes('Forbidden')) {
           errorMessage = 'PaymentPoint API access denied. Please verify API credentials.';

@@ -197,13 +197,22 @@ export const createPaymentPointVirtualAccount = onCall({
     const secretKey = paymentPointSecretKey.value();
     const businessId = paymentPointBusinessId.value();
     
+    console.log('PaymentPoint credentials check:', { 
+      hasApiKey: !!apiKey, 
+      hasSecretKey: !!secretKey, 
+      hasBusinessId: !!businessId,
+      apiKeyLength: apiKey ? apiKey.length : 0,
+      secretKeyLength: secretKey ? secretKey.length : 0,
+      businessIdLength: businessId ? businessId.length : 0
+    });
+    
     if (!apiKey || !secretKey || !businessId) {
       console.error('PaymentPoint credentials missing:', { 
         hasApiKey: !!apiKey, 
         hasSecretKey: !!secretKey, 
         hasBusinessId: !!businessId 
       });
-      throw new HttpsError('failed-precondition', 'PaymentPoint credentials not configured. Please contact support.');
+      throw new HttpsError('failed-precondition', 'PaymentPoint API credentials are not properly configured in Firebase secrets. Please contact admin to verify the API keys.');
     }
 
     console.log('Creating PaymentPoint virtual account for user:', userId);
