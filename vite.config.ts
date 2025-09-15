@@ -90,6 +90,19 @@ export default defineConfig({
               }));
             }
           });
+          proxy.on('proxyRes', (proxyRes, req, res) => {
+            // Handle unknown status code 530 from PaymentPoint API
+            if (proxyRes.statusCode === 530) {
+              console.log('PaymentPoint API returned status 530, converting to 503');
+              res.writeHead(503, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({
+                error: 'PaymentPoint API service unavailable',
+                message: 'The PaymentPoint service is temporarily unavailable. Please try again later.',
+                statusCode: 503
+              }));
+              return;
+            }
+          });
           proxy.on('proxyReq', (proxyReq, req, res) => {
             console.log('Attempting PaymentPoint request:', req.url);
             proxyReq.setHeader('User-Agent', 'ProxyNumSMS/1.0');
