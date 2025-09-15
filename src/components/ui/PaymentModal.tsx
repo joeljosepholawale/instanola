@@ -147,9 +147,16 @@ export function PaymentModal({ isOpen, onClose, onSuccess, exchangeRate, directP
       if (err instanceof Error) {
         errorMessage = err.message;
         
-        // Handle specific PaymentPoint API errors
-        if (errorMessage.includes('API Key is missing') || errorMessage.includes('401')) {
-          errorMessage = 'PaymentPoint API keys are not configured. Please contact admin to set up the API keys.';
+        // Handle specific PaymentPoint errors
+        if (errorMessage.includes('API keys are not configured') || 
+            errorMessage.includes('API Key is missing') || 
+            errorMessage.includes('401')) {
+          showError('Service Configuration', 'PaymentPoint API keys need to be configured. Please contact support or use crypto payment instead.');
+          // Auto-redirect to crypto payment after 3 seconds
+          setTimeout(() => {
+            setShowManualCryptoModal(true);
+          }, 3000);
+          return;
         } else if (errorMessage.includes('403') || errorMessage.includes('Forbidden')) {
           errorMessage = 'PaymentPoint API access denied. Please verify API credentials.';
         } else if (errorMessage.includes('500') || errorMessage.includes('Internal Server Error')) {
@@ -157,26 +164,10 @@ export function PaymentModal({ isOpen, onClose, onSuccess, exchangeRate, directP
         }
       }
       
-      if (errorMessage.includes('development mode')) {
-        error('Development Mode', 'PaymentPoint requires production deployment with Firebase Functions. Use crypto payment for testing.');
-        // Auto-redirect to crypto payment in development
-        setTimeout(() => {
-          setShowManualCryptoModal(true);
-        }, 2000);
-      } else {
-        if (errorMessage.includes('API keys are not configured')) {
-          error('Configuration Required', 'PaymentPoint API keys need to be set up. Please contact support or use crypto payment instead.');
-          // Show crypto payment as alternative
-          setTimeout(() => {
-            setShowManualCryptoModal(true);
-          }, 3000);
-        } else {
-          error('Service Error', errorMessage);
-        }
-      }
+      showError('PaymentPoint Error', errorMessage);
       
-      // If PaymentPoint is unavailable, show crypto payment as alternative
-      if (errorMessage.includes('unavailable') || errorMessage.includes('contact support') || errorMessage.includes('deployment') || errorMessage.includes('API keys')) {
+      // Show crypto payment as alternative for configuration issues
+      if (errorMessage.includes('API keys') || errorMessage.includes('contact support')) {
         setTimeout(() => {
           setShowManualCryptoModal(true);
         }, 2000);

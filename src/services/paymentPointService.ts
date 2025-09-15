@@ -74,8 +74,37 @@ export class PaymentPointService {
         };
       }
 
-      // Create new account via Firebase Function
-      const result = await this.createVirtualAccountFunction(data);
+      // Create new account via Firebase Function with retry logic
+      let result;
+      let lastError;
+      
+      // Retry up to 3 times for network issues
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          console.log(`PaymentPoint API attempt ${attempt}/3`);
+          result = await this.createVirtualAccountFunction(data);
+          break; // Success, exit retry loop
+        } catch (error: any) {
+          lastError = error;
+          console.warn(`PaymentPoint attempt ${attempt} failed:`, error.message);
+          
+          // Don't retry for authentication or permission errors
+          if (error.code === 'functions/unauthenticated' || 
+              error.code === 'functions/permission-denied' ||
+              error.message.includes('API Key is missing')) {
+            throw error;
+          }
+          
+          // Wait before retry (exponential backoff)
+          if (attempt < 3) {
+            await new Promise(resolve => setTimeout(resolve, attempt * 1000));
+          }
+        }
+      }
+      
+      if (!result) {
+        throw lastError || new Error('Failed after 3 attempts');
+      }
       
       if (!result.data.success) {
         throw new Error(result.data.message || 'Failed to create virtual account');
@@ -89,7 +118,9 @@ export class PaymentPointService {
       
       // Handle specific Firebase errors
       if (error instanceof Error) {
-        if (error.message.includes('functions/not-found')) {
+        if (error.message.includes('API Key is missing') || error.message.includes('401')) {
+          throw new Error('PaymentPoint API keys are not configured. Please contact admin to set up the service, or use crypto payment instead.');
+        } else if (error.message.includes('functions/not-found')) {
           throw new Error('PaymentPoint service is not deployed. Please contact support for assistance.');
         } else if (error.message.includes('functions/unauthenticated')) {
           throw new Error('Authentication required. Please log in again.');
