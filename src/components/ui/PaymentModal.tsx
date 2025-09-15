@@ -142,7 +142,20 @@ export function PaymentModal({ isOpen, onClose, onSuccess, exchangeRate, directP
       }
     } catch (err) {
       console.error('Error creating virtual account:', err);
-      const errorMessage = err instanceof Error ? err.message : 'Failed to create virtual account';
+      let errorMessage = 'Failed to create virtual account';
+      
+      if (err instanceof Error) {
+        errorMessage = err.message;
+        
+        // Handle specific PaymentPoint API errors
+        if (errorMessage.includes('API Key is missing') || errorMessage.includes('401')) {
+          errorMessage = 'PaymentPoint API keys are not configured. Please contact admin to set up the API keys.';
+        } else if (errorMessage.includes('403') || errorMessage.includes('Forbidden')) {
+          errorMessage = 'PaymentPoint API access denied. Please verify API credentials.';
+        } else if (errorMessage.includes('500') || errorMessage.includes('Internal Server Error')) {
+          errorMessage = 'PaymentPoint service is experiencing issues. Please try again later.';
+        }
+      }
       
       if (errorMessage.includes('development mode')) {
         error('Development Mode', 'PaymentPoint requires production deployment with Firebase Functions. Use crypto payment for testing.');
@@ -151,11 +164,19 @@ export function PaymentModal({ isOpen, onClose, onSuccess, exchangeRate, directP
           setShowManualCryptoModal(true);
         }, 2000);
       } else {
-        error('Service Error', errorMessage);
+        if (errorMessage.includes('API keys are not configured')) {
+          error('Configuration Required', 'PaymentPoint API keys need to be set up. Please contact support or use crypto payment instead.');
+          // Show crypto payment as alternative
+          setTimeout(() => {
+            setShowManualCryptoModal(true);
+          }, 3000);
+        } else {
+          error('Service Error', errorMessage);
+        }
       }
       
       // If PaymentPoint is unavailable, show crypto payment as alternative
-      if (errorMessage.includes('unavailable') || errorMessage.includes('contact support') || errorMessage.includes('deployment')) {
+      if (errorMessage.includes('unavailable') || errorMessage.includes('contact support') || errorMessage.includes('deployment') || errorMessage.includes('API keys')) {
         setTimeout(() => {
           setShowManualCryptoModal(true);
         }, 2000);
