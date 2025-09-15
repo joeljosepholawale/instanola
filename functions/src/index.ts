@@ -788,7 +788,7 @@ export const getNOWPaymentStatus = onCall({
             currency: paymentData.payCurrency,
             payAddress: paymentData.payAddress,
             status: paymentData.status,
-            purchaseId: paymentData.purchaseId
+          bankCode: ['20946', '20897'], // Both Palmpay and Opay as per docs
           }
         };
       }
