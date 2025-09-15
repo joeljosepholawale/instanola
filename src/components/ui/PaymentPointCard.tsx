@@ -150,9 +150,31 @@ export const PaymentPointCard: React.FC<PaymentPointCardProps> = ({ className })
       </CardHeader>
       
       <CardContent className="space-y-4">
+        // Check if Firebase Functions are available
+        if (!functions) {
+          throw new Error('Firebase Functions not initialized');
+        }
+        
         {/* Account Status Info */}
-        <div className="bg-green-50 border border-green-200 rounded-lg p-3">
-          <div className="flex items-start space-x-2">
+        console.error('PaymentPoint account creation error:', error);
+        
+        // Handle specific Firebase Function errors
+        if (error.code === 'functions/not-found') {
+          setError('PaymentPoint service is currently being deployed. Please try again in a few minutes or use manual payment options.');
+        } else if (error.code === 'functions/unavailable') {
+          setError('PaymentPoint service is temporarily unavailable. Please try manual payment options.');
+        } else if (error.message?.includes('fetch failed') || error.message?.includes('TypeError: fetch failed')) {
+          setError('Unable to connect to PaymentPoint service. Please check your internet connection or try manual payment options.');
+        } else if (error.code === 'unauthenticated') {
+          setError('Please log in again to create a virtual account.');
+        } else {
+          setError(`PaymentPoint service error: ${error.message || 'Unknown error occurred'}`);
+        }
+        
+        // Auto-redirect to manual payment after showing error
+        setTimeout(() => {
+          setShowManualPayment(true);
+        }, 3000);
             <Info className="h-4 w-4 text-green-600 mt-0.5" />
             <div className="text-sm text-green-800">
               <p className="font-medium">Bank Transfer Deposits</p>
@@ -221,6 +243,11 @@ export const PaymentPointCard: React.FC<PaymentPointCardProps> = ({ className })
                   <Copy className="h-4 w-4 mr-2" />
                   Copy Account Details
                 </Button>
+              </div>
+            )}
+            {error.includes('service') && (
+              <div className="mt-2 text-xs text-red-500">
+                Redirecting to manual payment options in 3 seconds...
               </div>
             )}
           </div>

@@ -18,6 +18,18 @@ const firebaseConfig = {
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 export const auth = getAuth(app);
 export const db = getFirestore(app);
-export const functions = getFunctions(app);
+
+// Initialize Functions with error handling
+let functions;
+try {
+  functions = getFunctions(app);
+  // Set region if needed (uncomment if functions are deployed to a specific region)
+  // functions = getFunctions(app, 'us-central1');
+} catch (error) {
+  console.warn('Firebase Functions initialization failed:', error);
+  functions = null;
+}
+
+export { functions };
 export const storage = getStorage(app);
 export default app;
