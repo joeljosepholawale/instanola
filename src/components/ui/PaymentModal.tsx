@@ -426,18 +426,6 @@ export function PaymentModal({ isOpen, onClose, onSuccess, exchangeRate, directP
         </div>
       </div>
 
-      {/* Manual Crypto Payment Modal */}
-      <ManualCryptoPaymentModal
-        isOpen={showManualCryptoModal}
-        onClose={() => {
-          setShowManualCryptoModal(false);
-          handleClose();
-        }}
-        onSuccess={() => {
-          setShowManualCryptoModal(false);
-          handlePaymentSuccess(0);
-        }}
-      />
-    </>
-  );
-}
+      </>
+    );
+  }
