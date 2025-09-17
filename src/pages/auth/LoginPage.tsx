@@ -217,6 +217,15 @@ export function LoginPage() {
                   Sign up for free
                 </Link>
               </p>
+              <p className="text-emerald-200 mt-2">
+                Admin user?{' '}
+                <Link 
+                  to="/admin/login" 
+                  className="font-bold text-red-400 hover:text-red-300 transition-colors"
+                >
+                  Admin login
+                </Link>
+              </p>
             </div>
           </div>
 

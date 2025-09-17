@@ -196,6 +196,15 @@ export function Header() {
                     Dashboard
                   </Button>
                 </Link>
+                {/* Admin Login Link for non-admin users */}
+                {!user.isAdmin && (
+                  <Link to="/admin/login">
+                    <Button variant="ghost" size="sm" className="text-gray-600 hover:text-red-600 hover:bg-red-50">
+                      <Shield className="w-4 h-4 mr-2" />
+                      Admin
+                    </Button>
+                  </Link>
+                )}
                 <Button variant="ghost" size="sm" onClick={handleSignOut} className="text-gray-600 hover:text-red-600 hover:bg-red-50">
                   <LogOut className="w-4 h-4 mr-2" />
                   Sign Out
