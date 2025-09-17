@@ -165,10 +165,18 @@ export const createPaymentPointVirtualAccount = functions.https.onCall(async (da
       };
     }
 
-    // PaymentPoint API credentials
-    const apiKey = 'f5cac610af31a143abcb458191a9434fd9e1ee91';
-    const secretKey = 'ffc7d975ab05d7ded2df40aca56c3e441de78ba1fab1c1600487b4faf3232c7f1681d9e04f11c3771e713d5fd7cd805c82128c38fb29d67d1847d8a';
-    const businessId = '069e4b494cc072663678554d1d6d69d73e34c97b';
+    // 🔑 Load API key from Firebase config
+    const apiKey = functions.config().paymentpoint?.key;
+    const secretKey = functions.config().paymentpoint?.secret;
+    const businessId = functions.config().paymentpoint?.business_id;
+    
+    if (!apiKey || !secretKey || !businessId) {
+      console.error("❌ PaymentPoint credentials missing from Firebase config");
+      throw new functions.https.HttpsError(
+        "internal",
+        "PaymentPoint API credentials are not configured. Please contact admin to set up the service."
+      );
+    }
 
     console.log('Creating PaymentPoint virtual account for user:', userId);
 
@@ -477,7 +485,7 @@ export const sendNotificationEmail = onCall({
     }
 
     // Configure nodemailer transporter
-    const transporter = nodemailer.createTransporter({
+    const transporter = nodemailer.createTransport({
       service: 'gmail',
       auth: {
         user: smtpUserEmail,
