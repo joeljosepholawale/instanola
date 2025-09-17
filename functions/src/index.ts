@@ -2,20 +2,21 @@ import * as functions from 'firebase-functions';
 import * as admin from 'firebase-admin';
 import { createHmac } from 'crypto';
 import * as nodemailer from 'nodemailer';
-import fetch from 'node-fetch';
-import { onCall, onRequest, HttpsError, CallableRequest } from 'firebase-functions/v2/https';
-import { FieldValue } from 'firebase-admin/firestore';
-import { defineSecret } from 'firebase-functions/params';
+
+// Use v1 Firebase Functions for simpler deployment
+const HttpsError = functions.https.HttpsError;
 
 admin.initializeApp();
 
 const db = admin.firestore();
 
-// Define secret parameters
-const nowPaymentsIpnSecret = defineSecret('NOWPAYMENTS_IPN_SECRET');
-const daisySmsApiKey = defineSecret('DAISYSMS_API_KEY');
-const smtpUser = defineSecret('SMTP_USER');
-const smtpPassword = defineSecret('SMTP_PASSWORD');
+// PaymentPoint credentials (replace with your actual values)
+const PAYMENTPOINT_API_KEY = 'f5cac610af31a143abcb458191a9434fd9e1ee91';
+const PAYMENTPOINT_SECRET_KEY = 'ffc7d975ab05d7ded2df40aca56c3e441de78ba1fab1c1600487b4faf3232c7f1681d9e04f11c3771e713d5fd7cd805c82128c38fb29d67d1847d8a';
+const PAYMENTPOINT_BUSINESS_ID = '069e4b494cc072663678554d1d6d69d73e34c97b';
+
+// NOWPayments API key
+const NOWPAYMENTS_API_KEY = '386TTNM-Q2CMAY8-HBM7PZ9-EJXWFWT';
 
 interface PlisioInvoiceResponse {
   status: string;
@@ -138,10 +139,10 @@ interface PaymentPointWebhookData {
 }
 
 // PaymentPoint Virtual Account Creation using Firebase Config
-export const createPaymentPointVirtualAccount = functions.https.onCall(async (data, context) => {
+export const createPaymentPointVirtualAccount = functions.https.onCall(async (data: any, context: functions.https.CallableContext) => {
   try {
     // Validate authentication
-    if (!context.auth) {
+    if (!context || !context.auth) {
       throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
     }
 
@@ -165,26 +166,18 @@ export const createPaymentPointVirtualAccount = functions.https.onCall(async (da
         success: true,
         message: 'Account already exists',
         account: {
-          accountNumber: accountData?.accountNumber,
-          accountName: accountData?.accountName,
-          bankName: accountData?.bankName,
+          accountNumber: accountData!.accountNumber,
+          accountName: accountData!.accountName,
+          bankName: accountData!.bankName,
           isPermanent: true
         }
       };
     }
 
-    // 🔑 Load API key from Firebase config
-    const apiKey = functions.config().paymentpoint?.key;
-    const secretKey = functions.config().paymentpoint?.secret;
-    const businessId = functions.config().paymentpoint?.business_id;
-    
-    if (!apiKey || !secretKey || !businessId) {
-      console.error("❌ PaymentPoint credentials missing from Firebase config");
-      throw new functions.https.HttpsError(
-        "internal",
-        "PaymentPoint API credentials are not configured. Please contact admin to set up the service."
-      );
-    }
+    // Use hardcoded credentials
+    const apiKey = PAYMENTPOINT_API_KEY;
+    const secretKey = PAYMENTPOINT_SECRET_KEY;
+    const businessId = PAYMENTPOINT_BUSINESS_ID;
 
     console.log('Creating PaymentPoint virtual account for user:', userId);
 
@@ -194,7 +187,7 @@ export const createPaymentPointVirtualAccount = functions.https.onCall(async (da
       name: customerName,
       phoneNumber: customerPhone || '08000000000',
       bankCode: ['20946'], // Palmpay bank code only
-      businessId: businessId.trim()
+      businessId: businessId
     };
 
     console.log('PaymentPoint API request:', JSON.stringify(requestBody, null, 2));
@@ -204,8 +197,8 @@ export const createPaymentPointVirtualAccount = functions.https.onCall(async (da
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${secretKey.trim()}`, // ✅ Bearer prefix is required
-        'X-API-Key': apiKey.trim()
+        'Authorization': `Bearer ${secretKey}`,
+        'X-API-Key': apiKey
       },
       body: JSON.stringify(requestBody)
     });
@@ -278,7 +271,7 @@ export const createPaymentPointVirtualAccount = functions.https.onCall(async (da
 });
 
 // PaymentPoint Webhook Handler - Fixed Version
-export const paymentPointWebhook = functions.https.onRequest(async (req, res) => {
+export const paymentPointWebhook = functions.https.onRequest(async (req: any, res: any) => {
   // Set CORS headers
   res.set('Access-Control-Allow-Origin', '*');
   res.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
@@ -296,8 +289,8 @@ export const paymentPointWebhook = functions.https.onRequest(async (req, res) =>
     console.log('Body:', JSON.stringify(req.body, null, 2));
 
     // Validate webhook signature
-    const signature = req.headers['x-paymentpoint-signature'] as string;
-    const secretKey = functions.config().paymentpoint?.secret;
+    const signature = req.headers['x-paymentpoint-signature'] || req.get('x-paymentpoint-signature');
+    const secretKey = PAYMENTPOINT_SECRET_KEY;
     
     if (secretKey && signature) {
       const expectedSignature = createHmac('sha256', secretKey)
@@ -404,8 +397,8 @@ export const paymentPointWebhook = functions.https.onRequest(async (req, res) =>
                 
                 // Update referrer's earnings
                 await db.collection('users').doc(referrerId).update({
-                  referralEarningsAvailable: (referrerData?.referralEarningsAvailable || 0) + REFERRAL_BONUS,
-                  referralEarningsTotal: (referrerData?.referralEarningsTotal || 0) + REFERRAL_BONUS
+                  referralEarningsAvailable: (referrerData.referralEarningsAvailable || 0) + REFERRAL_BONUS,
+                  referralEarningsTotal: (referrerData.referralEarningsTotal || 0) + REFERRAL_BONUS
                 });
                 
                 // Mark referral as paid
@@ -465,34 +458,31 @@ export const paymentPointWebhook = functions.https.onRequest(async (req, res) =>
 });
 
 // Send notification email
-export const sendNotificationEmail = onCall({
-  cors: true,
-  secrets: [smtpUser, smtpPassword]
-}, async (request: CallableRequest) => {
-  const { data, auth } = request;
+export const sendNotificationEmail = functions.https.onCall(async (data: any, context: functions.https.CallableContext) => {
   
   try {
     // Some notifications don't require authentication (e.g., admin alerts)
     const allowedUnauthenticatedTypes = ['admin_alert'];
     const { type, message, userEmail, userId, additionalData } = data;
     
-    if (!allowedUnauthenticatedTypes.includes(type) && !auth) {
-      throw new HttpsError('unauthenticated', 'User must be authenticated for this notification type');
+    if (!allowedUnauthenticatedTypes.includes(type) && (!context || !context.auth)) {
+      throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated for this notification type');
     }
 
     if (!type) {
-      throw new HttpsError('invalid-argument', 'Notification type is required');
+      throw new functions.https.HttpsError('invalid-argument', 'Notification type is required');
     }
 
-    const smtpUserEmail = smtpUser.value();
-    const smtpPass = smtpPassword.value();
+    // Use environment variables or hardcoded values for SMTP
+    const smtpUserEmail = functions.config().smtp?.user || process.env.SMTP_USER;
+    const smtpPass = functions.config().smtp?.password || process.env.SMTP_PASSWORD;
 
     if (!smtpUserEmail || !smtpPass) {
-      throw new HttpsError('failed-precondition', 'SMTP credentials not configured');
+      throw new functions.https.HttpsError('failed-precondition', 'SMTP credentials not configured');
     }
 
     // Configure nodemailer transporter
-    const transporter = nodemailer.createTransporter({
+    const transporter = nodemailer.createTransport({
       service: 'gmail',
       auth: {
         user: smtpUserEmail,
@@ -588,18 +578,15 @@ export const sendNotificationEmail = onCall({
 
   } catch (error) {
     console.error('Error sending notification email:', error);
-    if (error instanceof HttpsError) {
+    if (error instanceof functions.https.HttpsError) {
       throw error;
     }
-    throw new HttpsError('internal', `Failed to send notification email: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    throw new functions.https.HttpsError('internal', `Failed to send notification email: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 });
 
 // NOWPayments webhook handler
-export const nowPaymentsWebhook = onRequest({
-  cors: true,
-  secrets: [nowPaymentsIpnSecret]
-}, async (req: any, res: any) => {
+export const nowPaymentsWebhook = functions.https.onRequest(async (req: any, res: any) => {
   // Set CORS headers
   res.set('Access-Control-Allow-Origin', '*');
   res.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
@@ -621,8 +608,8 @@ export const nowPaymentsWebhook = onRequest({
     console.log('NOWPayments webhook received:', webhookData);
 
     // Verify webhook signature
-    const signature = req.get('x-nowpayments-sig');
-    const ipnSecret = nowPaymentsIpnSecret.value();
+    const signature = req.headers['x-nowpayments-sig'] || req.get('x-nowpayments-sig');
+    const ipnSecret = functions.config().nowpayments?.ipn_secret || process.env.NOWPAYMENTS_IPN_SECRET;
     
     if (signature && ipnSecret) {
       const sortedParams = JSON.stringify(webhookData, Object.keys(webhookData).sort());
@@ -659,7 +646,7 @@ export const nowPaymentsWebhook = onRequest({
     await paymentRef.update({
       status: payment_status,
       actuallyPaid: actually_paid,
-      lastUpdated: FieldValue.serverTimestamp(),
+      lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
       webhookData: webhookData
     });
 
@@ -672,7 +659,7 @@ export const nowPaymentsWebhook = onRequest({
 
       // Credit user's wallet
       await db.collection('users').doc(userId).update({
-        walletBalance: FieldValue.increment(amount)
+        walletBalance: admin.firestore.FieldValue.increment(amount)
       });
 
       // Create transaction record
@@ -685,7 +672,7 @@ export const nowPaymentsWebhook = onRequest({
         paymentId: payment_id,
         status: 'completed',
         description: `Crypto deposit - ${pay_amount} ${pay_currency}`,
-        createdAt: FieldValue.serverTimestamp()
+        createdAt: admin.firestore.FieldValue.serverTimestamp()
       });
 
       console.log(`User ${userId} credited with $${amount} from NOWPayments payment ${payment_id}`);
@@ -700,21 +687,18 @@ export const nowPaymentsWebhook = onRequest({
 });
 
 // Get NOWPayments payment status
-export const getNOWPaymentStatus = onCall({
-  cors: true
-}, async (request: CallableRequest) => {
-  const { data, auth } = request;
+export const getNOWPaymentStatus = functions.https.onCall(async (data: any, context: functions.https.CallableContext) => {
   
   try {
     // Verify user is authenticated
-    if (!auth) {
-      throw new HttpsError('unauthenticated', 'User must be authenticated');
+    if (!context || !context.auth) {
+      throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
     }
 
     const { paymentId, orderId } = data;
 
     if (!paymentId && !orderId) {
-      throw new HttpsError('invalid-argument', 'Either paymentId or orderId must be provided');
+      throw new functions.https.HttpsError('invalid-argument', 'Either paymentId or orderId must be provided');
     }
 
     // Get payment from Firestore first
@@ -724,19 +708,19 @@ export const getNOWPaymentStatus = onCall({
       if (paymentDoc.exists) {
         paymentData = paymentDoc.data()!;
         // Verify user owns this payment
-        if (paymentData.userId !== auth.uid) {
-          throw new HttpsError('permission-denied', 'You do not have access to this payment');
+        if (paymentData.userId !== context.auth.uid) {
+          throw new functions.https.HttpsError('permission-denied', 'You do not have access to this payment');
         }
       }
     }
 
     if (!paymentData && !paymentId) {
-      throw new HttpsError('not-found', 'Payment not found');
+      throw new functions.https.HttpsError('not-found', 'Payment not found');
     }
 
-    const apiKey = '386TTNM-Q2CMAY8-HBM7PZ9-EJXWFWT';
+    const apiKey = NOWPAYMENTS_API_KEY;
     if (!apiKey) {
-      throw new HttpsError('failed-precondition', 'NOWPayments API key not configured');
+      throw new functions.https.HttpsError('failed-precondition', 'NOWPayments API key not configured');
     }
 
     // Use paymentId from Firestore data if not provided
@@ -770,7 +754,7 @@ export const getNOWPaymentStatus = onCall({
         };
       }
       
-      throw new HttpsError('failed-precondition', `NOWPayments API unavailable (${response.status})`);
+      throw new functions.https.HttpsError('failed-precondition', `NOWPayments API unavailable (${response.status})`);
     }
 
     const result: NOWPaymentsStatusResponse = await response.json();
@@ -780,14 +764,14 @@ export const getNOWPaymentStatus = onCall({
       await db.collection('nowpayments_payments').doc(orderId).update({
         status: result.payment_status,
         actuallyPaid: result.actually_paid,
-        lastUpdated: FieldValue.serverTimestamp()
+        lastUpdated: admin.firestore.FieldValue.serverTimestamp()
       });
 
       // If payment completed and not already processed
       if (result.payment_status === 'finished' && paymentData.status !== 'finished') {
         // Credit user's wallet
         await db.collection('users').doc(paymentData.userId).update({
-          walletBalance: FieldValue.increment(paymentData.amount)
+          walletBalance: admin.firestore.FieldValue.increment(paymentData.amount)
         });
 
         // Create transaction record
@@ -800,7 +784,7 @@ export const getNOWPaymentStatus = onCall({
           paymentId: result.payment_id,
           status: 'completed',
           description: `Crypto deposit - ${result.pay_amount} ${result.pay_currency}`,
-          createdAt: FieldValue.serverTimestamp()
+          createdAt: admin.firestore.FieldValue.serverTimestamp()
         });
       }
     }
@@ -821,37 +805,37 @@ export const getNOWPaymentStatus = onCall({
 
   } catch (error) {
     console.error('Error checking NOWPayments status:', error);
-    if (error instanceof HttpsError) {
+    if (error instanceof functions.https.HttpsError) {
       throw error;
     }
-    throw new HttpsError('internal', 'Failed to check payment status');
+    throw new functions.https.HttpsError('internal', 'Failed to check payment status');
   }
 });
 
 // Affiliate program functions
-export const processReferralEarnings = onCall({
-  cors: true,
-  secrets: []
-}, async (request: CallableRequest) => {
-  const { data, auth } = request;
+export const processReferralEarnings = functions.https.onCall(async (data: any, context: functions.https.CallableContext) => {
   
   try {
-    if (!auth) {
-      throw new HttpsError('unauthenticated', 'User must be authenticated');
+    if (!context || !context.auth) {
+      throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
     }
 
     const { userId, depositAmount } = data;
     
-    if (auth.uid !== userId) {
-      throw new HttpsError('permission-denied', 'Unauthorized access');
+    if (context.auth.uid !== userId) {
+      throw new functions.https.HttpsError('permission-denied', 'Unauthorized access');
     }
 
     const userDoc = await db.collection('users').doc(userId).get();
     if (!userDoc.exists) {
-      throw new HttpsError('not-found', 'User not found');
+      throw new functions.https.HttpsError('not-found', 'User not found');
     }
 
-    const userData = userDoc.data()!;
+    const userData = userDoc.data();
+    if (!userData) {
+      throw new functions.https.HttpsError('not-found', 'User data not found');
+    }
+    
     const referredBy = userData.referredBy;
     
     // Check if user was referred and hasn't earned referral bonus yet
@@ -883,7 +867,7 @@ export const processReferralEarnings = onCall({
           referredUserId: userId,
           amount: REFERRAL_BONUS,
           depositAmount,
-          createdAt: FieldValue.serverTimestamp(),
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
           status: 'earned'
         });
         
@@ -894,26 +878,22 @@ export const processReferralEarnings = onCall({
     return { success: true, earned: 0 };
   } catch (error) {
     console.error('Referral processing error:', error);
-    throw new HttpsError('internal', 'Failed to process referral');
+    throw new functions.https.HttpsError('internal', 'Failed to process referral');
   }
 });
 
 // Loyalty program functions
-export const awardLoyaltyPoints = onCall({
-  cors: true,
-  secrets: []
-}, async (request: CallableRequest) => {
-  const { data, auth } = request;
+export const awardLoyaltyPoints = functions.https.onCall(async (data: any, context: functions.https.CallableContext) => {
   
   try {
-    if (!auth) {
-      throw new HttpsError('unauthenticated', 'User must be authenticated');
+    if (!context || !context.auth) {
+      throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
     }
 
     const { userId, action, amount } = data;
     
-    if (auth.uid !== userId) {
-      throw new HttpsError('permission-denied', 'Unauthorized access');
+    if (context.auth.uid !== userId) {
+      throw new functions.https.HttpsError('permission-denied', 'Unauthorized access');
     }
 
     let pointsToAward = 0;
@@ -939,8 +919,8 @@ export const awardLoyaltyPoints = onCall({
     if (pointsToAward > 0) {
       // Update user's loyalty points
       await db.collection('users').doc(userId).update({
-        loyaltyPoints: FieldValue.increment(pointsToAward),
-        totalLoyaltyPoints: FieldValue.increment(pointsToAward)
+        loyaltyPoints: admin.firestore.FieldValue.increment(pointsToAward),
+        totalLoyaltyPoints: admin.firestore.FieldValue.increment(pointsToAward)
       });
 
       // Log loyalty points transaction
@@ -949,45 +929,41 @@ export const awardLoyaltyPoints = onCall({
         action,
         points: pointsToAward,
         amount,
-        createdAt: FieldValue.serverTimestamp()
+        createdAt: admin.firestore.FieldValue.serverTimestamp()
       });
     }
 
     return { success: true, pointsAwarded: pointsToAward };
   } catch (error) {
     console.error('Loyalty points error:', error);
-    throw new HttpsError('internal', 'Failed to award loyalty points');
+    throw new functions.https.HttpsError('internal', 'Failed to award loyalty points');
   }
 });
 
 // Redeem loyalty points
-export const redeemLoyaltyPoints = onCall({
-  cors: true,
-  secrets: []
-}, async (request: CallableRequest) => {
-  const { data, auth } = request;
+export const redeemLoyaltyPoints = functions.https.onCall(async (data: any, context: functions.https.CallableContext) => {
   
   try {
-    if (!auth) {
-      throw new HttpsError('unauthenticated', 'User must be authenticated');
+    if (!context || !context.auth) {
+      throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
     }
 
     const { userId, points } = data;
     
-    if (auth.uid !== userId) {
-      throw new HttpsError('permission-denied', 'Unauthorized access');
+    if (context.auth.uid !== userId) {
+      throw new functions.https.HttpsError('permission-denied', 'Unauthorized access');
     }
 
     const userDoc = await db.collection('users').doc(userId).get();
     if (!userDoc.exists) {
-      throw new HttpsError('not-found', 'User not found');
+      throw new functions.https.HttpsError('not-found', 'User not found');
     }
 
     const userData = userDoc.data()!;
     const availablePoints = userData.loyaltyPoints || 0;
 
     if (points > availablePoints) {
-      throw new HttpsError('invalid-argument', 'Insufficient loyalty points');
+      throw new functions.https.HttpsError('invalid-argument', 'Insufficient loyalty points');
     }
 
     // 100 points = ₦1
@@ -995,8 +971,8 @@ export const redeemLoyaltyPoints = onCall({
     
     // Update user's points and wallet balance
     await db.collection('users').doc(userId).update({
-      loyaltyPoints: FieldValue.increment(-points),
-      walletBalanceNGN: FieldValue.increment(cashValue)
+      loyaltyPoints: admin.firestore.FieldValue.increment(-points),
+      walletBalanceNGN: admin.firestore.FieldValue.increment(cashValue)
     });
 
     // Log redemption
@@ -1004,40 +980,36 @@ export const redeemLoyaltyPoints = onCall({
       userId,
       points,
       cashValue,
-      createdAt: FieldValue.serverTimestamp()
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
     });
 
     return { success: true, pointsRedeemed: points, cashValue };
   } catch (error) {
     console.error('Loyalty redemption error:', error);
-    throw new HttpsError('internal', 'Failed to redeem loyalty points');
+    throw new functions.https.HttpsError('internal', 'Failed to redeem loyalty points');
   }
 });
 
 // Secure DaisySMS API proxy (protects API key)
-export const daisySmsProxy = onCall({
-  cors: true,
-  secrets: [daisySmsApiKey]
-}, async (request: CallableRequest) => {
-  const { data, auth } = request;
+export const daisySmsProxy = functions.https.onCall(async (data: any, context: functions.https.CallableContext) => {
   
   try {
     // Verify user is authenticated
-    if (!auth) {
-      throw new HttpsError('unauthenticated', 'User must be authenticated');
+    if (!context || !context.auth) {
+      throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
     }
 
     const { action, params } = data;
 
     // Validate action
     if (!action || typeof action !== 'string') {
-      throw new HttpsError('invalid-argument', 'Action is required');
+      throw new functions.https.HttpsError('invalid-argument', 'Action is required');
     }
 
     // Get API key securely
-    const apiKey = daisySmsApiKey.value();
+    const apiKey = functions.config().daisysms?.api_key || process.env.DAISYSMS_API_KEY;
     if (!apiKey) {
-      throw new HttpsError('failed-precondition', 'DaisySMS API key not configured');
+      throw new functions.https.HttpsError('failed-precondition', 'DaisySMS API key not configured');
     }
 
     // Build query parameters securely
@@ -1047,7 +1019,7 @@ export const daisySmsProxy = onCall({
       ...params
     });
 
-    console.log('DaisySMS API call:', { action, userId: auth.uid });
+    console.log('DaisySMS API call:', { action, userId: context.auth.uid });
 
     // Make secure API call to DaisySMS
     const response = await fetch(`https://daisysms.com/stubs/handler_api.php?${queryParams}`, {
@@ -1058,13 +1030,13 @@ export const daisySmsProxy = onCall({
     });
 
     if (!response.ok) {
-      throw new HttpsError('internal', 'DaisySMS API request failed');
+      throw new functions.https.HttpsError('internal', 'DaisySMS API request failed');
     }
 
     const result = await response.text();
 
     // Log usage for admin monitoring
-    console.log('DaisySMS API response received for user:', auth.uid);
+    console.log('DaisySMS API response received for user:', context.auth.uid);
 
     return {
       success: true,
@@ -1073,17 +1045,15 @@ export const daisySmsProxy = onCall({
 
   } catch (error) {
     console.error('DaisySMS proxy error:', error);
-    if (error instanceof HttpsError) {
+    if (error instanceof functions.https.HttpsError) {
       throw error;
     }
-    throw new HttpsError('internal', `DaisySMS API error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    throw new functions.https.HttpsError('internal', `DaisySMS API error: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 });
 
 // DaisySMS webhook handler for SMS notifications
-export const daisySmsWebhook = onRequest({
-  cors: true
-}, async (req: any, res: any) => {
+export const daisySmsWebhook = functions.https.onRequest(async (req: any, res: any) => {
   // Set CORS headers
   res.set('Access-Control-Allow-Origin', '*');
   res.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
@@ -1101,7 +1071,7 @@ export const daisySmsWebhook = onRequest({
       return;
     }
 
-    const webhookData = req.body;
+    const webhookData = req.body as any;
     console.log('DaisySMS webhook received:', webhookData);
 
     // Parse webhook data according to DaisySMS format:
@@ -1133,11 +1103,15 @@ export const daisySmsWebhook = onRequest({
           status: 'sms_received',
           smsCode: code,
           smsText: text,
-          smsReceivedAt: FieldValue.serverTimestamp(),
-          lastUpdated: FieldValue.serverTimestamp()
+          smsReceivedAt: admin.firestore.FieldValue.serverTimestamp(),
+          lastUpdated: admin.firestore.FieldValue.serverTimestamp()
         });
 
-        const rentalData = rentalDoc.data()!;
+        const rentalData = rentalDoc.data();
+        if (!rentalData) {
+          console.warn(`Rental ${activationId} data not found`);
+          return;
+        }
         const userId = rentalData.userId;
 
         console.log(`Rental ${activationId} updated with SMS code for user ${userId}`);
