@@ -108,8 +108,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
               <ul className="space-y-1">
                 {navigation.map((item) => {
                   const Icon = item.icon;
-                  const isActive = location.pathname === tab.href || 
-                    (tab.href === '/admin' && location.pathname.startsWith('/admin'));
+                  const isActive = location.pathname === item.href || 
+                    (item.href === '/admin' && location.pathname.startsWith('/admin'));
                   
                   return (
                     <li key={item.name}>
@@ -118,13 +118,13 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                         onClick={() => setSidebarOpen(false)}
                         className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
                           isActive
-                            ? (tab.adminOnly ? 'bg-purple-50 text-purple-700 border-r-2 border-purple-600' : 'bg-blue-50 text-blue-700 border-r-2 border-blue-600')
+                            ? (item.adminOnly ? 'bg-purple-50 text-purple-700 border-r-2 border-purple-600' : 'bg-blue-50 text-blue-700 border-r-2 border-blue-600')
                             : 'text-gray-700 hover:text-blue-700 hover:bg-gray-50'
                         }`}
                       >
-                        <Icon className={`w-5 h-5 ${isActive ? (tab.adminOnly ? 'text-purple-600' : 'text-blue-600') : 'text-gray-400'}`} />
+                        <Icon className={`w-5 h-5 ${isActive ? (item.adminOnly ? 'text-purple-600' : 'text-blue-600') : 'text-gray-400'}`} />
                         {item.name}
-                        {tab.adminOnly && (
+                        {item.adminOnly && (
                           <span className="ml-auto bg-purple-100 text-purple-700 text-xs px-2 py-1 rounded-full font-medium">
                             Admin
                           </span>
