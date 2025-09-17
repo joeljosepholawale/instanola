@@ -16,8 +16,10 @@ import { Card, CardHeader, CardTitle, CardContent } from '../../components/ui/Ca
 import { Button } from '../../components/ui/Button';
 import { useAuth } from '../../hooks/useAuth';
 import { useToast } from '../../hooks/useToast';
-import { doc, getDoc, updateDoc, setDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, setDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
+import { httpsCallable } from 'firebase/functions';
+import { functions } from '../../lib/firebase';
 import { SEOHead } from '../../components/SEO/SEOHead';
 
 interface ReferralData {
@@ -71,11 +73,19 @@ export function ReferEarnPage() {
       setLoading(true);
       console.log('Starting fetchReferralData for user:', user.id);
       
-      // Get user's referral data
-      const userDoc = await getDoc(doc(db, 'users', user.id));
-      if (!userDoc.exists()) {
+      // Use Cloud Function to get referral data securely
+      const getReferralsFunction = httpsCallable(functions, 'getReferrals');
+      const result = await getReferralsFunction();
+      
+      if (!result.data.success) {
+        throw new Error(result.data.error || 'Failed to fetch referral data');
+      }
+      
+      const referralData = result.data.data;
+      
+      // If user doesn't have referral code, create one
+      if (!referralData.referralCode) {
         console.log('User document does not exist, creating it:', user.id);
-        // Create user document with referral code
         const newReferralCode = generateReferralCode();
         await setDoc(doc(db, 'users', user.id), {
           email: user.email,
@@ -84,9 +94,8 @@ export function ReferEarnPage() {
           createdAt: new Date(),
           walletBalanceNGN: 0,
           walletBalance: 0
-        });
+        }, { merge: true });
         
-        // Set the referral data immediately
         setReferralData(prev => ({
           ...prev,
           referralCode: newReferralCode
@@ -95,60 +104,8 @@ export function ReferEarnPage() {
         return;
       }
       
-      const userData = userDoc.data();
-      console.log('User data retrieved:', userData);
-      let referralCode = userData.referralCode;
-      console.log('Existing referral code:', referralCode);
-      
-      // Create referral code if doesn't exist
-      if (!referralCode) {
-        referralCode = generateReferralCode();
-        console.log('Generating new referral code:', referralCode);
-        try {
-          await updateDoc(doc(db, 'users', user.id), {
-            referralCode: referralCode
-          });
-          console.log('Successfully saved new referral code to database');
-        } catch (updateError) {
-          console.error('Failed to save referral code, using generated code anyway:', updateError);
-        }
-      } else {
-        console.log('Using existing referral code:', referralCode);
-      }
-
-      // Get referrals made by this user
-      const referralsQuery = query(
-        collection(db, 'users'),
-        where('referredBy', '==', referralCode)
-      );
-      
-      const referralsSnapshot = await getDocs(referralsQuery);
-      const referrals = referralsSnapshot.docs.map(doc => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          email: data.email,
-          status: data.totalDepositNGN >= MINIMUM_DEPOSIT ? 'qualified' : 'pending',
-          depositAmount: data.totalDepositNGN || 0,
-          earnedAmount: data.totalDepositNGN >= MINIMUM_DEPOSIT ? REFERRAL_BONUS : 0,
-          joinedAt: data.createdAt?.toDate() || new Date()
-        };
-      });
-
-      const qualifiedReferrals = referrals.filter(r => r.status === 'qualified');
-      const pendingReferrals = referrals.filter(r => r.status === 'pending');
-
-      const newReferralData = {
-        referralCode,
-        referralCount: referrals.length,
-        referralEarnings: userData.referralEarningsAvailable || 0,
-        pendingEarnings: pendingReferrals.length * REFERRAL_BONUS,
-        totalEarned: userData.referralEarningsTotal || 0,
-        referrals
-      };
-
-      console.log('Setting referral data:', newReferralData);
-      setReferralData(newReferralData);
+      console.log('Setting referral data from Cloud Function:', referralData);
+      setReferralData(referralData);
       
     } catch (err) {
       console.error('Error fetching referral data:', err);

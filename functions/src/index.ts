@@ -11,6 +11,74 @@ initializeApp();
 
 const db = getFirestore();
 
+// Get user's referral data securely
+export const getReferrals = onCall({
+  cors: true
+}, async (request: CallableRequest) => {
+  const { auth } = request;
+  
+  try {
+    // Verify user is authenticated
+    if (!auth) {
+      throw new HttpsError('unauthenticated', 'User must be authenticated');
+    }
+
+    const userId = auth.uid;
+
+    // Get user's referral code
+    const userDoc = await db.collection('users').doc(userId).get();
+    if (!userDoc.exists) {
+      throw new HttpsError('not-found', 'User not found');
+    }
+
+    const userData = userDoc.data()!;
+    const referralCode = userData.referralCode;
+
+    if (!referralCode) {
+      throw new HttpsError('not-found', 'User has no referral code');
+    }
+
+    // Get referrals made by this user (admin privileges allow this query)
+    const referralsSnapshot = await db.collection('users')
+      .where('referredBy', '==', referralCode)
+      .get();
+
+    const referrals = referralsSnapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        email: data.email || 'Unknown',
+        status: (data.totalDepositNGN || 0) >= 1000 ? 'qualified' : 'pending',
+        depositAmount: data.totalDepositNGN || 0,
+        earnedAmount: (data.totalDepositNGN || 0) >= 1000 ? 100 : 0,
+        joinedAt: data.createdAt || new Date()
+      };
+    });
+
+    const qualifiedReferrals = referrals.filter(r => r.status === 'qualified');
+    const pendingReferrals = referrals.filter(r => r.status === 'pending');
+
+    return {
+      success: true,
+      data: {
+        referralCode,
+        referralCount: referrals.length,
+        referralEarnings: userData.referralEarningsAvailable || 0,
+        pendingEarnings: pendingReferrals.length * 100,
+        totalEarned: userData.referralEarningsTotal || 0,
+        referrals
+      }
+    };
+
+  } catch (error) {
+    console.error('Error fetching referrals:', error);
+    if (error instanceof HttpsError) {
+      throw error;
+    }
+    throw new HttpsError('internal', 'Failed to fetch referral data');
+  }
+});
+
 // Define secret parameter with different name to avoid conflicts
 const plisioApiSecret = defineSecret('PLISIO_API_SECRET');
 
