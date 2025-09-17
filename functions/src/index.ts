@@ -1,12 +1,21 @@
 import * as functions from 'firebase-functions';
 import * as admin from 'firebase-admin';
-import {createHmac} from 'crypto';
+import { createHmac } from 'crypto';
 import * as nodemailer from 'nodemailer';
 import fetch from 'node-fetch';
+import { onCall, onRequest, HttpsError, CallableRequest } from 'firebase-functions/v2/https';
+import { FieldValue } from 'firebase-admin/firestore';
+import { defineSecret } from 'firebase-functions/params';
 
 admin.initializeApp();
 
 const db = admin.firestore();
+
+// Define secret parameters
+const nowPaymentsIpnSecret = defineSecret('NOWPAYMENTS_IPN_SECRET');
+const daisySmsApiKey = defineSecret('DAISYSMS_API_KEY');
+const smtpUser = defineSecret('SMTP_USER');
+const smtpPassword = defineSecret('SMTP_PASSWORD');
 
 interface PlisioInvoiceResponse {
   status: string;
@@ -68,7 +77,6 @@ interface NOWPaymentsStatusResponse {
   outcome_currency?: string;
 }
 
-// PaymentPoint interfaces
 interface PaymentPointVirtualAccountRequest {
   email: string;
   name: string;
@@ -129,7 +137,7 @@ interface PaymentPointWebhookData {
   timestamp: string;
 }
 
-// PaymentPoint Virtual Account Creation - Fixed Version
+// PaymentPoint Virtual Account Creation using Firebase Config
 export const createPaymentPointVirtualAccount = functions.https.onCall(async (data, context) => {
   try {
     // Validate authentication
@@ -215,7 +223,6 @@ export const createPaymentPointVirtualAccount = functions.https.onCall(async (da
         errorData = { message: errorText };
       }
       
-      throw new HttpsError('internal', `PaymentPoint API error: ${response.status} - ${errorData.message || errorText}`);
       throw new functions.https.HttpsError('internal', `PaymentPoint API error: ${response.status} - ${errorData.message || errorText}`);
     }
 
@@ -380,7 +387,7 @@ export const paymentPointWebhook = functions.https.onRequest(async (req, res) =>
           const userDoc = await db.collection('users').doc(userId).get();
           if (userDoc.exists) {
             const userData = userDoc.data();
-            const referredBy = userData.referredBy;
+            const referredBy = userData?.referredBy;
             
             if (referredBy && !userData?.referralEarningsPaid) {
               const referrerSnapshot = await db.collection('users')
@@ -485,7 +492,7 @@ export const sendNotificationEmail = onCall({
     }
 
     // Configure nodemailer transporter
-    const transporter = nodemailer.createTransport({
+    const transporter = nodemailer.createTransporter({
       service: 'gmail',
       auth: {
         user: smtpUserEmail,
@@ -592,7 +599,7 @@ export const sendNotificationEmail = onCall({
 export const nowPaymentsWebhook = onRequest({
   cors: true,
   secrets: [nowPaymentsIpnSecret]
-}, async (req: Request, res: Response) => {
+}, async (req: any, res: any) => {
   // Set CORS headers
   res.set('Access-Control-Allow-Origin', '*');
   res.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
@@ -614,7 +621,7 @@ export const nowPaymentsWebhook = onRequest({
     console.log('NOWPayments webhook received:', webhookData);
 
     // Verify webhook signature
-    const signature = req.headers['x-nowpayments-sig'] as string;
+    const signature = req.get('x-nowpayments-sig');
     const ipnSecret = nowPaymentsIpnSecret.value();
     
     if (signature && ipnSecret) {
@@ -758,7 +765,7 @@ export const getNOWPaymentStatus = onCall({
             currency: paymentData.payCurrency,
             payAddress: paymentData.payAddress,
             status: paymentData.status,
-          bankCode: ['20946', '20897'], // Both Palmpay and Opay as per docs
+            purchaseId: paymentData.purchaseId
           }
         };
       }
@@ -1047,8 +1054,7 @@ export const daisySmsProxy = onCall({
       method: 'GET',
       headers: {
         'User-Agent': 'InstantNums/1.0'
-      },
-      signal: AbortSignal.timeout(10000) // 10 second timeout
+      }
     });
 
     if (!response.ok) {
@@ -1077,7 +1083,7 @@ export const daisySmsProxy = onCall({
 // DaisySMS webhook handler for SMS notifications
 export const daisySmsWebhook = onRequest({
   cors: true
-}, async (req: Request, res: Response) => {
+}, async (req: any, res: any) => {
   // Set CORS headers
   res.set('Access-Control-Allow-Origin', '*');
   res.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
