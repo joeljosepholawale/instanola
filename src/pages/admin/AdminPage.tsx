@@ -331,7 +331,6 @@ export function AdminPage() {
             </div>
           )}
           {activeTab === 'support' && <SupportManagement />}
-          {activeTab === 'support' && <SupportManagement />}
           {activeTab === 'security' && <SecurityCompliance />}
           {activeTab === 'api' && <APIManagement />}
           {activeTab === 'manual-service' && <ManualServicePricing />}
