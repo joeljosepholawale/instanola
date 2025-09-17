@@ -14,7 +14,7 @@ import {
   HelpCircle,
   Gift,
   Home,
-  CreditCard
+  CreditCard,
   Shield
 } from 'lucide-react';
 import { Logo } from '../ui/Logo';
