@@ -3,17 +3,6 @@ import * as admin from 'firebase-admin';
 import { createHmac } from 'crypto';
 import * as nodemailer from 'nodemailer';
 
-// Use v1 Firebase Functions for simpler deployment
-
-// Define the context type for v1 Firebase Functions
-interface CallableContext {
-  auth?: {
-    uid: string;
-    token: any;
-  };
-  rawRequest: any;
-}
-
 admin.initializeApp();
 
 const db = admin.firestore();
@@ -147,7 +136,7 @@ interface PaymentPointWebhookData {
 }
 
 // PaymentPoint Virtual Account Creation using Firebase Config
-export const createPaymentPointVirtualAccount = functions.https.onCall(async (data: any, context: CallableContext) => {
+export const createPaymentPointVirtualAccount = functions.https.onCall(async (data, context) => {
   try {
     // Validate authentication
     if (!context || !context.auth) {
@@ -466,14 +455,14 @@ export const paymentPointWebhook = functions.https.onRequest(async (req: any, re
 });
 
 // Send notification email
-export const sendNotificationEmail = functions.https.onCall(async (data: any, context: CallableContext) => {
+export const sendNotificationEmail = functions.https.onCall(async (data, context) => {
   
   try {
     // Some notifications don't require authentication (e.g., admin alerts)
     const allowedUnauthenticatedTypes = ['admin_alert'];
     const { type, message, userEmail, userId, additionalData } = data;
     
-    if (!allowedUnauthenticatedTypes.includes(type) && (!context || !context.auth)) {
+    if (!allowedUnauthenticatedTypes.includes(type) && (!context.auth)) {
       throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated for this notification type');
     }
 
@@ -490,7 +479,7 @@ export const sendNotificationEmail = functions.https.onCall(async (data: any, co
     }
 
     // Configure nodemailer transporter
-    const transporter = nodemailer.createTransporter({
+    const transporter = nodemailer.createTransport({
       service: 'gmail',
       auth: {
         user: smtpUserEmail,
@@ -695,11 +684,11 @@ export const nowPaymentsWebhook = functions.https.onRequest(async (req: any, res
 });
 
 // Get NOWPayments payment status
-export const getNOWPaymentStatus = functions.https.onCall(async (data: any, context: CallableContext) => {
+export const getNOWPaymentStatus = functions.https.onCall(async (data, context) => {
   
   try {
     // Verify user is authenticated
-    if (!context || !context.auth) {
+    if (!context.auth) {
       throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
     }
 
@@ -821,10 +810,10 @@ export const getNOWPaymentStatus = functions.https.onCall(async (data: any, cont
 });
 
 // Affiliate program functions
-export const processReferralEarnings = functions.https.onCall(async (data: any, context: CallableContext) => {
+export const processReferralEarnings = functions.https.onCall(async (data, context) => {
   
   try {
-    if (!context || !context.auth) {
+    if (!context.auth) {
       throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
     }
 
@@ -891,10 +880,10 @@ export const processReferralEarnings = functions.https.onCall(async (data: any, 
 });
 
 // Loyalty program functions
-export const awardLoyaltyPoints = functions.https.onCall(async (data: any, context: CallableContext) => {
+export const awardLoyaltyPoints = functions.https.onCall(async (data, context) => {
   
   try {
-    if (!context || !context.auth) {
+    if (!context.auth) {
       throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
     }
 
@@ -949,10 +938,10 @@ export const awardLoyaltyPoints = functions.https.onCall(async (data: any, conte
 });
 
 // Redeem loyalty points
-export const redeemLoyaltyPoints = functions.https.onCall(async (data: any, context: CallableContext) => {
+export const redeemLoyaltyPoints = functions.https.onCall(async (data, context) => {
   
   try {
-    if (!context || !context.auth) {
+    if (!context.auth) {
       throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
     }
 
@@ -999,11 +988,11 @@ export const redeemLoyaltyPoints = functions.https.onCall(async (data: any, cont
 });
 
 // Secure DaisySMS API proxy (protects API key)
-export const daisySmsProxy = functions.https.onCall(async (data: any, context: CallableContext) => {
+export const daisySmsProxy = functions.https.onCall(async (data, context) => {
   
   try {
     // Verify user is authenticated
-    if (!context || !context.auth) {
+    if (!context.auth) {
       throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
     }
 
