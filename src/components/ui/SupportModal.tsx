@@ -42,6 +42,26 @@ export function SupportModal({ isOpen, onClose, onSuccess }: SupportModalProps) 
       return;
     }
 
+    if (formData.subject.trim().length < 3) {
+      setError('Subject must be at least 3 characters long');
+      return;
+    }
+
+    if (formData.message.trim().length < 10) {
+      setError('Message must be at least 10 characters long');
+      return;
+    }
+
+    if (formData.subject.trim().length > 200) {
+      setError('Subject cannot exceed 200 characters');
+      return;
+    }
+
+    if (formData.message.trim().length > 5000) {
+      setError('Message cannot exceed 5000 characters');
+      return;
+    }
+
     try {
       setLoading(true);
       setError('');

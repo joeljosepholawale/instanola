@@ -48,6 +48,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     { name: 'Rent Numbers', href: '/dashboard/rentals', icon: CreditCard },
     { name: 'API Access', href: '/dashboard/api', icon: Globe },
     { name: 'Refer & Earn', href: '/dashboard/refer-earn', icon: Gift },
+    { name: 'Support', href: '#', icon: MessageSquare, action: 'support' },
     { name: 'Settings', href: '/dashboard/settings', icon: Settings },
     { name: 'FAQs', href: '/dashboard/faqs', icon: HelpCircle },
   ];

@@ -22,6 +22,7 @@ import {
 import { Button } from '../../components/ui/Button';
 import { Card, CardHeader, CardTitle, CardContent } from '../../components/ui/Card';
 import { AnnouncementModal } from '../../components/ui/AnnouncementModal';
+import { SupportModal } from '../../components/ui/SupportModal';
 import { useAuth } from '../../hooks/useAuth';
 import { useAnnouncements } from '../../hooks/useAnnouncements';
 import { formatCurrency, formatDate } from '../../lib/utils';
@@ -49,6 +50,7 @@ export function DashboardPage() {
   const [exchangeRate, setExchangeRate] = useState(1600);
   const [balanceUSD, setBalanceUSD] = useState(0);
   const [balanceNGN, setBalanceNGN] = useState(0);
+  const [showSupportModal, setShowSupportModal] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -405,6 +407,14 @@ export function DashboardPage() {
                   Get Your First Number
                   <ArrowRight className="ml-2 w-5 h-5" />
                 </Button>
+                <Button 
+                  onClick={() => setShowSupportModal(true)}
+                  variant="outline"
+                  className="border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                >
+                  <MessageSquare className="w-5 h-5 mr-2" />
+                  Need Help?
+                </Button>
               </div>
             ) : (
               <div className="space-y-4">
@@ -504,6 +514,20 @@ export function DashboardPage() {
                 </div>
               </div>
             </div>
+            
+            {/* Support Button for users with rentals */}
+            {recentActivity.length > 0 && (
+              <div className="mt-6 text-center">
+                <Button 
+                  onClick={() => setShowSupportModal(true)}
+                  variant="outline"
+                  className="border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                >
+                  <MessageSquare className="w-4 h-4 mr-2" />
+                  Contact Support
+                </Button>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -520,6 +544,15 @@ export function DashboardPage() {
         onClose={dismissAnnouncement}
         announcement={showAnnouncement || undefined}
         type="admin"
+      />
+
+      {/* Support Modal */}
+      <SupportModal
+        isOpen={showSupportModal}
+        onClose={() => setShowSupportModal(false)}
+        onSuccess={() => {
+          setShowSupportModal(false);
+        }}
       />
     </>
   );

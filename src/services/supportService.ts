@@ -2,6 +2,7 @@
 import { doc, setDoc, getDocs, collection, query, where, orderBy, updateDoc, limit } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { EmailService } from './emailService';
+import { SecurityService } from './securityService';
 
 export interface SupportMessage {
   id: string;
@@ -36,13 +37,34 @@ export class SupportService {
     try {
       const messageId = `support_${request.userId}_${Date.now()}`;
       
+      // Security validation and sanitization
+      const sanitizedSubject = SecurityService.validateAndSanitizeInput(request.subject, 'text', 200);
+      const sanitizedMessage = SecurityService.validateAndSanitizeInput(request.message, 'text', 5000);
+      
+      if (!sanitizedSubject.valid) {
+        throw new Error(`Invalid subject: ${sanitizedSubject.error}`);
+      }
+      
+      if (!sanitizedMessage.valid) {
+        throw new Error(`Invalid message: ${sanitizedMessage.error}`);
+      }
+      
+      // Additional security checks
+      if (sanitizedMessage.sanitized.length < 10) {
+        throw new Error('Message must be at least 10 characters long');
+      }
+      
+      if (sanitizedSubject.sanitized.length < 3) {
+        throw new Error('Subject must be at least 3 characters long');
+      }
+      
       const supportMessage: SupportMessage = {
         id: messageId,
         userId: request.userId,
         userName: request.userName,
         userEmail: request.userEmail,
-        subject: request.subject,
-        message: request.message,
+        subject: sanitizedSubject.sanitized,
+        message: sanitizedMessage.sanitized,
         status: 'open',
         priority: request.priority || 'medium',
         category: request.category,
@@ -52,6 +74,22 @@ export class SupportService {
 
       // Save to Firebase
       await setDoc(doc(db, 'support_messages', messageId), supportMessage);
+
+      // Log security event for admin monitoring
+      await SecurityService.logSecurityEvent({
+        type: 'admin_access',
+        userId: request.userId,
+        ipAddress: 'unknown',
+        userAgent: navigator.userAgent,
+        details: { 
+          action: 'support_message_submitted',
+          category: request.category,
+          priority: request.priority 
+        },
+        severity: 'low',
+        timestamp: new Date(),
+        resolved: true
+      });
 
       // Send notification email to user
       try {
