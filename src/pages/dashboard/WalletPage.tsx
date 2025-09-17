@@ -600,12 +600,10 @@ export function WalletPage() {
       </div>
 
       {/* Payment Modals */}
-      <PaymentModal
-        isOpen={showPaymentModal}
-        onClose={() => setShowPaymentModal(false)}
+      <ManualPaymentModal
+        isOpen={showManualPaymentModal}
+        onClose={() => setShowManualPaymentModal(false)}
         onSuccess={handlePaymentPointSuccess}
-        exchangeRate={exchangeRate}
-        directPaymentPoint={true}
       />
 
       <NOWPaymentModal
