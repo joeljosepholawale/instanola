@@ -7,73 +7,13 @@ admin.initializeApp();
 
 const db = admin.firestore();
 
-// PaymentPoint credentials (replace with your actual values)
+// PaymentPoint credentials
 const PAYMENTPOINT_API_KEY = 'f5cac610af31a143abcb458191a9434fd9e1ee91';
 const PAYMENTPOINT_SECRET_KEY = 'ffc7d975ab05d7ded2df40aca56c3e441de78ba1fab1c1600487b4faf3232c7f1681d9e04f11c3771e713d5fd7cd805c82128c38fb29d67d1847d8a';
 const PAYMENTPOINT_BUSINESS_ID = '069e4b494cc072663678554d1d6d69d73e34c97b';
 
 // NOWPayments API key
 const NOWPAYMENTS_API_KEY = '386TTNM-Q2CMAY8-HBM7PZ9-EJXWFWT';
-
-interface PlisioInvoiceResponse {
-  status: string;
-  data: {
-    id: string;
-    order_number: string;
-    order_name: string;
-    source_currency: string;
-    source_rate: string;
-    source_amount: string;
-    currency: string;
-    amount: string;
-    wallet_hash: string;
-    psys_cid: string;
-    qr_code: string;
-    verify_hash: string;
-    invoice_commission: string;
-    invoice_sum: string;
-    invoice_total_sum: string;
-    invoice_url: string;
-    expire_utc: number;
-    status: string;
-  };
-}
-
-interface NOWPaymentsCreateResponse {
-  payment_id: number;
-  payment_status: string;
-  pay_address: string;
-  price_amount: number;
-  price_currency: string;
-  pay_amount: number;
-  actually_paid: number;
-  pay_currency: string;
-  order_id: string;
-  order_description: string;
-  purchase_id: string;
-  created_at: string;
-  updated_at: string;
-  outcome_amount?: number;
-  outcome_currency?: string;
-}
-
-interface NOWPaymentsStatusResponse {
-  payment_id: number;
-  payment_status: string;
-  pay_address: string;
-  price_amount: number;
-  price_currency: string;
-  pay_amount: number;
-  actually_paid: number;
-  pay_currency: string;
-  order_id: string;
-  order_description: string;
-  purchase_id: string;
-  created_at: string;
-  updated_at: string;
-  outcome_amount?: number;
-  outcome_currency?: string;
-}
 
 interface PaymentPointVirtualAccountRequest {
   email: string;
@@ -135,7 +75,7 @@ interface PaymentPointWebhookData {
   timestamp: string;
 }
 
-// PaymentPoint Virtual Account Creation using Firebase Config
+// PaymentPoint Virtual Account Creation
 export const createPaymentPointVirtualAccount = functions.https.onCall(async (data, context) => {
   try {
     // Validate authentication
@@ -159,22 +99,19 @@ export const createPaymentPointVirtualAccount = functions.https.onCall(async (da
     const existingAccount = await db.collection('paymentpoint_accounts').doc(userId).get();
     if (existingAccount.exists) {
       const accountData = existingAccount.data();
-      return {
-        success: true,
-        message: 'Account already exists',
-        account: {
-          accountNumber: accountData!.accountNumber,
-          accountName: accountData!.accountName,
-          bankName: accountData!.bankName,
-          isPermanent: true
-        }
-      };
+      if (accountData) {
+        return {
+          success: true,
+          message: 'Account already exists',
+          account: {
+            accountNumber: accountData.accountNumber,
+            accountName: accountData.accountName,
+            bankName: accountData.bankName,
+            isPermanent: true
+          }
+        };
+      }
     }
-
-    // Use hardcoded credentials
-    const apiKey = PAYMENTPOINT_API_KEY;
-    const secretKey = PAYMENTPOINT_SECRET_KEY;
-    const businessId = PAYMENTPOINT_BUSINESS_ID;
 
     console.log('Creating PaymentPoint virtual account for user:', userId);
 
@@ -184,18 +121,18 @@ export const createPaymentPointVirtualAccount = functions.https.onCall(async (da
       name: customerName,
       phoneNumber: customerPhone || '08000000000',
       bankCode: ['20946'], // Palmpay bank code only
-      businessId: businessId
+      businessId: PAYMENTPOINT_BUSINESS_ID
     };
 
     console.log('PaymentPoint API request:', JSON.stringify(requestBody, null, 2));
 
-    // 🌍 API endpoint (corrected URL)
+    // Make API call
     const response = await fetch('https://api.paymentpoint.ng/api/v1/createVirtualAccount', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${secretKey}`,
-        'X-API-Key': apiKey
+        'Authorization': `Bearer ${PAYMENTPOINT_SECRET_KEY}`,
+        'X-API-Key': PAYMENTPOINT_API_KEY
       },
       body: JSON.stringify(requestBody)
     });
@@ -267,8 +204,8 @@ export const createPaymentPointVirtualAccount = functions.https.onCall(async (da
   }
 });
 
-// PaymentPoint Webhook Handler - Fixed Version
-export const paymentPointWebhook = functions.https.onRequest(async (req: any, res: any) => {
+// PaymentPoint Webhook Handler
+export const paymentPointWebhook = functions.https.onRequest(async (req, res) => {
   // Set CORS headers
   res.set('Access-Control-Allow-Origin', '*');
   res.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
@@ -287,10 +224,9 @@ export const paymentPointWebhook = functions.https.onRequest(async (req: any, re
 
     // Validate webhook signature
     const signature = req.headers['x-paymentpoint-signature'] || req.get('x-paymentpoint-signature');
-    const secretKey = PAYMENTPOINT_SECRET_KEY;
     
-    if (secretKey && signature) {
-      const expectedSignature = createHmac('sha256', secretKey)
+    if (PAYMENTPOINT_SECRET_KEY && signature) {
+      const expectedSignature = createHmac('sha256', PAYMENTPOINT_SECRET_KEY)
         .update(JSON.stringify(req.body))
         .digest('hex');
       
@@ -377,43 +313,45 @@ export const paymentPointWebhook = functions.https.onRequest(async (req: any, re
           const userDoc = await db.collection('users').doc(userId).get();
           if (userDoc.exists) {
             const userData = userDoc.data();
-            const referredBy = userData?.referredBy;
-            
-            if (referredBy && !userData?.referralEarningsPaid) {
-              const referrerSnapshot = await db.collection('users')
-                .where('referralCode', '==', referredBy)
-                .limit(1)
-                .get();
+            if (userData) {
+              const referredBy = userData.referredBy;
               
-              if (!referrerSnapshot.empty) {
-                const referrerDoc = referrerSnapshot.docs[0];
-                const referrerId = referrerDoc.id;
-                const referrerData = referrerDoc.data();
+              if (referredBy && !userData.referralEarningsPaid) {
+                const referrerSnapshot = await db.collection('users')
+                  .where('referralCode', '==', referredBy)
+                  .limit(1)
+                  .get();
                 
-                const REFERRAL_BONUS = 100; // ₦100
-                
-                // Update referrer's earnings
-                await db.collection('users').doc(referrerId).update({
-                  referralEarningsAvailable: (referrerData.referralEarningsAvailable || 0) + REFERRAL_BONUS,
-                  referralEarningsTotal: (referrerData.referralEarningsTotal || 0) + REFERRAL_BONUS
-                });
-                
-                // Mark referral as paid
-                await db.collection('users').doc(userId).update({
-                  referralEarningsPaid: true
-                });
-                
-                // Log referral earning
-                await db.collection('referralEarnings').add({
-                  referrerId,
-                  referredUserId: userId,
-                  amount: REFERRAL_BONUS,
-                  depositAmount: amount,
-                  createdAt: admin.firestore.FieldValue.serverTimestamp(),
-                  status: 'earned'
-                });
-                
-                console.log(`Referral bonus awarded: ₦${REFERRAL_BONUS} to ${referrerId}`);
+                if (!referrerSnapshot.empty) {
+                  const referrerDoc = referrerSnapshot.docs[0];
+                  const referrerId = referrerDoc.id;
+                  const referrerData = referrerDoc.data();
+                  
+                  const REFERRAL_BONUS = 100; // ₦100
+                  
+                  // Update referrer's earnings
+                  await db.collection('users').doc(referrerId).update({
+                    referralEarningsAvailable: (referrerData.referralEarningsAvailable || 0) + REFERRAL_BONUS,
+                    referralEarningsTotal: (referrerData.referralEarningsTotal || 0) + REFERRAL_BONUS
+                  });
+                  
+                  // Mark referral as paid
+                  await db.collection('users').doc(userId).update({
+                    referralEarningsPaid: true
+                  });
+                  
+                  // Log referral earning
+                  await db.collection('referralEarnings').add({
+                    referrerId,
+                    referredUserId: userId,
+                    amount: REFERRAL_BONUS,
+                    depositAmount: amount,
+                    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                    status: 'earned'
+                  });
+                  
+                  console.log(`Referral bonus awarded: ₦${REFERRAL_BONUS} to ${referrerId}`);
+                }
               }
             }
           }
@@ -456,13 +394,12 @@ export const paymentPointWebhook = functions.https.onRequest(async (req: any, re
 
 // Send notification email
 export const sendNotificationEmail = functions.https.onCall(async (data, context) => {
-  
   try {
     // Some notifications don't require authentication (e.g., admin alerts)
     const allowedUnauthenticatedTypes = ['admin_alert'];
     const { type, message, userEmail, userId, additionalData } = data;
     
-    if (!allowedUnauthenticatedTypes.includes(type) && (!context.auth)) {
+    if (!allowedUnauthenticatedTypes.includes(type) && (!context || !context.auth)) {
       throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated for this notification type');
     }
 
@@ -583,7 +520,7 @@ export const sendNotificationEmail = functions.https.onCall(async (data, context
 });
 
 // NOWPayments webhook handler
-export const nowPaymentsWebhook = functions.https.onRequest(async (req: any, res: any) => {
+export const nowPaymentsWebhook = functions.https.onRequest(async (req, res) => {
   // Set CORS headers
   res.set('Access-Control-Allow-Origin', '*');
   res.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
@@ -637,7 +574,12 @@ export const nowPaymentsWebhook = functions.https.onRequest(async (req: any, res
       return;
     }
 
-    const paymentData = paymentDoc.data()!;
+    const paymentData = paymentDoc.data();
+    if (!paymentData) {
+      console.error('Payment data is undefined:', order_id);
+      res.status(404).send('Payment data not found');
+      return;
+    }
 
     // Update payment status
     await paymentRef.update({
@@ -685,10 +627,9 @@ export const nowPaymentsWebhook = functions.https.onRequest(async (req: any, res
 
 // Get NOWPayments payment status
 export const getNOWPaymentStatus = functions.https.onCall(async (data, context) => {
-  
   try {
     // Verify user is authenticated
-    if (!context.auth) {
+    if (!context || !context.auth) {
       throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
     }
 
@@ -703,9 +644,9 @@ export const getNOWPaymentStatus = functions.https.onCall(async (data, context) 
     if (orderId) {
       const paymentDoc = await db.collection('nowpayments_payments').doc(orderId).get();
       if (paymentDoc.exists) {
-        paymentData = paymentDoc.data()!;
+        paymentData = paymentDoc.data();
         // Verify user owns this payment
-        if (paymentData.userId !== context.auth.uid) {
+        if (paymentData && paymentData.userId !== context.auth.uid) {
           throw new functions.https.HttpsError('permission-denied', 'You do not have access to this payment');
         }
       }
@@ -715,8 +656,7 @@ export const getNOWPaymentStatus = functions.https.onCall(async (data, context) 
       throw new functions.https.HttpsError('not-found', 'Payment not found');
     }
 
-    const apiKey = NOWPAYMENTS_API_KEY;
-    if (!apiKey) {
+    if (!NOWPAYMENTS_API_KEY) {
       throw new functions.https.HttpsError('failed-precondition', 'NOWPayments API key not configured');
     }
 
@@ -727,7 +667,7 @@ export const getNOWPaymentStatus = functions.https.onCall(async (data, context) 
     const response = await fetch(`https://api.nowpayments.io/v1/payment/${finalPaymentId}`, {
       method: 'GET',
       headers: {
-        'x-api-key': apiKey
+        'x-api-key': NOWPAYMENTS_API_KEY
       }
     });
 
@@ -754,7 +694,7 @@ export const getNOWPaymentStatus = functions.https.onCall(async (data, context) 
       throw new functions.https.HttpsError('failed-precondition', `NOWPayments API unavailable (${response.status})`);
     }
 
-    const result: NOWPaymentsStatusResponse = await response.json();
+    const result = await response.json();
     
     // Update Firestore if we have the document
     if (orderId && paymentData) {
@@ -809,190 +749,11 @@ export const getNOWPaymentStatus = functions.https.onCall(async (data, context) 
   }
 });
 
-// Affiliate program functions
-export const processReferralEarnings = functions.https.onCall(async (data, context) => {
-  
-  try {
-    if (!context.auth) {
-      throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
-    }
-
-    const { userId, depositAmount } = data;
-    
-    if (context.auth.uid !== userId) {
-      throw new functions.https.HttpsError('permission-denied', 'Unauthorized access');
-    }
-
-    const userDoc = await db.collection('users').doc(userId).get();
-    if (!userDoc.exists) {
-      throw new functions.https.HttpsError('not-found', 'User not found');
-    }
-
-    const userData = userDoc.data();
-    if (!userData) {
-      throw new functions.https.HttpsError('not-found', 'User data not found');
-    }
-    
-    const referredBy = userData.referredBy;
-    
-    // Check if user was referred and hasn't earned referral bonus yet
-    if (referredBy && !userData.referralEarningsPaid && depositAmount >= 1000) {
-      // Find the referrer
-      const referrerQuery = await db.collection('users').where('referralCode', '==', referredBy).limit(1).get();
-      
-      if (!referrerQuery.empty) {
-        const referrerDoc = referrerQuery.docs[0];
-        const referrerId = referrerDoc.id;
-        const referrerData = referrerDoc.data();
-        
-        const REFERRAL_BONUS = 100; // ₦100
-        
-        // Update referrer's earnings
-        await db.collection('users').doc(referrerId).update({
-          referralEarningsAvailable: (referrerData.referralEarningsAvailable || 0) + REFERRAL_BONUS,
-          referralEarningsTotal: (referrerData.referralEarningsTotal || 0) + REFERRAL_BONUS
-        });
-        
-        // Mark referral as paid for the referred user
-        await db.collection('users').doc(userId).update({
-          referralEarningsPaid: true
-        });
-        
-        // Log the referral earning
-        await db.collection('referralEarnings').add({
-          referrerId,
-          referredUserId: userId,
-          amount: REFERRAL_BONUS,
-          depositAmount,
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
-          status: 'earned'
-        });
-        
-        return { success: true, earned: REFERRAL_BONUS };
-      }
-    }
-    
-    return { success: true, earned: 0 };
-  } catch (error) {
-    console.error('Referral processing error:', error);
-    throw new functions.https.HttpsError('internal', 'Failed to process referral');
-  }
-});
-
-// Loyalty program functions
-export const awardLoyaltyPoints = functions.https.onCall(async (data, context) => {
-  
-  try {
-    if (!context.auth) {
-      throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
-    }
-
-    const { userId, action, amount } = data;
-    
-    if (context.auth.uid !== userId) {
-      throw new functions.https.HttpsError('permission-denied', 'Unauthorized access');
-    }
-
-    let pointsToAward = 0;
-    
-    // Award points based on action
-    switch (action) {
-      case 'deposit':
-        // 1 point per ₦10 deposited
-        pointsToAward = Math.floor(amount / 10);
-        break;
-      case 'purchase':
-        // 2 points per number purchased
-        pointsToAward = amount * 2;
-        break;
-      case 'rental':
-        // 5 points per rental
-        pointsToAward = amount * 5;
-        break;
-      default:
-        return { success: true, pointsAwarded: 0 };
-    }
-
-    if (pointsToAward > 0) {
-      // Update user's loyalty points
-      await db.collection('users').doc(userId).update({
-        loyaltyPoints: admin.firestore.FieldValue.increment(pointsToAward),
-        totalLoyaltyPoints: admin.firestore.FieldValue.increment(pointsToAward)
-      });
-
-      // Log loyalty points transaction
-      await db.collection('loyaltyTransactions').add({
-        userId,
-        action,
-        points: pointsToAward,
-        amount,
-        createdAt: admin.firestore.FieldValue.serverTimestamp()
-      });
-    }
-
-    return { success: true, pointsAwarded: pointsToAward };
-  } catch (error) {
-    console.error('Loyalty points error:', error);
-    throw new functions.https.HttpsError('internal', 'Failed to award loyalty points');
-  }
-});
-
-// Redeem loyalty points
-export const redeemLoyaltyPoints = functions.https.onCall(async (data, context) => {
-  
-  try {
-    if (!context.auth) {
-      throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
-    }
-
-    const { userId, points } = data;
-    
-    if (context.auth.uid !== userId) {
-      throw new functions.https.HttpsError('permission-denied', 'Unauthorized access');
-    }
-
-    const userDoc = await db.collection('users').doc(userId).get();
-    if (!userDoc.exists) {
-      throw new functions.https.HttpsError('not-found', 'User not found');
-    }
-
-    const userData = userDoc.data()!;
-    const availablePoints = userData.loyaltyPoints || 0;
-
-    if (points > availablePoints) {
-      throw new functions.https.HttpsError('invalid-argument', 'Insufficient loyalty points');
-    }
-
-    // 100 points = ₦1
-    const cashValue = points / 100;
-    
-    // Update user's points and wallet balance
-    await db.collection('users').doc(userId).update({
-      loyaltyPoints: admin.firestore.FieldValue.increment(-points),
-      walletBalanceNGN: admin.firestore.FieldValue.increment(cashValue)
-    });
-
-    // Log redemption
-    await db.collection('loyaltyRedemptions').add({
-      userId,
-      points,
-      cashValue,
-      createdAt: admin.firestore.FieldValue.serverTimestamp()
-    });
-
-    return { success: true, pointsRedeemed: points, cashValue };
-  } catch (error) {
-    console.error('Loyalty redemption error:', error);
-    throw new functions.https.HttpsError('internal', 'Failed to redeem loyalty points');
-  }
-});
-
 // Secure DaisySMS API proxy (protects API key)
 export const daisySmsProxy = functions.https.onCall(async (data, context) => {
-  
   try {
     // Verify user is authenticated
-    if (!context.auth) {
+    if (!context || !context.auth) {
       throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
     }
 
@@ -1050,7 +811,7 @@ export const daisySmsProxy = functions.https.onCall(async (data, context) => {
 });
 
 // DaisySMS webhook handler for SMS notifications
-export const daisySmsWebhook = functions.https.onRequest(async (req: any, res: any) => {
+export const daisySmsWebhook = functions.https.onRequest(async (req, res) => {
   // Set CORS headers
   res.set('Access-Control-Allow-Origin', '*');
   res.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
@@ -1068,7 +829,7 @@ export const daisySmsWebhook = functions.https.onRequest(async (req: any, res: a
       return;
     }
 
-    const webhookData = req.body as any;
+    const webhookData = req.body;
     console.log('DaisySMS webhook received:', webhookData);
 
     // Parse webhook data according to DaisySMS format:
@@ -1105,16 +866,10 @@ export const daisySmsWebhook = functions.https.onRequest(async (req: any, res: a
         });
 
         const rentalData = rentalDoc.data();
-        if (!rentalData) {
-          console.warn(`Rental ${activationId} data not found`);
-          return;
+        if (rentalData) {
+          const userId = rentalData.userId;
+          console.log(`Rental ${activationId} updated with SMS code for user ${userId}`);
         }
-        const userId = rentalData.userId;
-
-        console.log(`Rental ${activationId} updated with SMS code for user ${userId}`);
-
-        // Optional: Send notification to user (if you have push notifications setup)
-        // await sendSMSNotification(userId, activationId, code);
       } else {
         console.warn(`Rental ${activationId} not found in database`);
       }
