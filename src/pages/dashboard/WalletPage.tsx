@@ -58,7 +58,6 @@ export function WalletPage() {
   const [convertingCurrency, setConvertingCurrency] = useState(false);
   const [conversionAmount, setConversionAmount] = useState('');
   const [conversionDirection, setConversionDirection] = useState<'usd-to-ngn' | 'ngn-to-usd'>('usd-to-ngn');
-  const [showConversionModal, setShowConversionModal] = useState(false);
   const [serviceStatus, setServiceStatus] = useState<'operational' | 'degraded' | 'outage'>('operational');
 
   useEffect(() => {
@@ -377,7 +376,7 @@ export function WalletPage() {
                     size="lg"
                   >
                     <Building2 className="w-5 h-5 mr-2" />
-                    Add NGN with Bank Transfer
+                    Add NGN with PaymentPoint
                     <ArrowRight className="w-5 h-5 ml-2" />
                   </Button>
                   
@@ -600,10 +599,12 @@ export function WalletPage() {
       </div>
 
       {/* Payment Modals */}
-      <ManualPaymentModal
-        isOpen={showManualPaymentModal}
-        onClose={() => setShowManualPaymentModal(false)}
+      <PaymentModal
+        isOpen={showPaymentModal}
+        onClose={() => setShowPaymentModal(false)}
         onSuccess={handlePaymentPointSuccess}
+        exchangeRate={exchangeRate}
+        directPaymentPoint={true}
       />
 
       <NOWPaymentModal
