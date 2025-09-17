@@ -10,6 +10,7 @@ import { ContactPage } from './pages/ContactPage';
 import ApiDocsPage from './pages/ApiDocsPage';
 import { LoginPage } from './pages/auth/LoginPage';
 import { SignUpPage } from './pages/auth/SignUpPage';
+import { AdminLoginPage } from './pages/auth/AdminLoginPage';
 import { ForgotPasswordPage } from './pages/auth/ForgotPasswordPage';
 import { DashboardPage } from './pages/dashboard/DashboardPage';
 import { NumbersPage as NumbersPageNew } from './pages/dashboard/NumbersPageDaisy';
@@ -115,6 +116,16 @@ function App() {
               <Route 
                 path="/forgot-password" 
                 element={user ? <Navigate to="/dashboard" /> : <ForgotPasswordPage />} 
+              />
+              
+              {/* Admin Login Route */}
+              <Route 
+                path="/admin/login" 
+                element={
+                  user?.isAdmin ? <Navigate to="/admin" /> : 
+                  user ? <Navigate to="/dashboard" /> : 
+                  <AdminLoginPage />
+                } 
               />
               
               {/* Protected Routes */}
