@@ -229,12 +229,13 @@ export const createPaymentPointVirtualAccount = onCall({
     console.log('PaymentPoint API request:', JSON.stringify(requestBody, null, 2));
 
     // Make API call to PaymentPoint with correct headers from documentation
-    const response = await fetch('https://api.paymentpoint.ng/api/v1/createVirtualAccount', {
+    const response = await fetch('https://api.paymentpoint.co/api/v1/virtual-account/create', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'api-key': apiKey.trim(),
-        'secret-key': secretKey.trim()
+        'Authorization': `Bearer ${apiKey.trim()}`,
+        'X-API-Version': '1.0',
+        'Accept': 'application/json'
       },
       body: JSON.stringify(requestBody)
     });
