@@ -15,7 +15,11 @@ import {
   Gift,
   Home,
   CreditCard
-} from 'lucide-react';
+  Shield,
+  Users,
+  DollarSign,
+  Activity,
+  Bell
 import { Logo } from '../ui/Logo';
 import { useAuth } from '../../hooks/useAuth';
 import { signOut } from 'firebase/auth';
