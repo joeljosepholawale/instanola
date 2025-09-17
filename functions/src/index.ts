@@ -237,7 +237,6 @@ export const createPaymentPointVirtualAccount = onCall({
         'api-key': apiKey.trim(),
         'Accept': 'application/json',
         'User-Agent': 'InstantNums/1.0'
-        'Accept': 'application/json'
       },
       body: JSON.stringify(requestBody)
     });
