@@ -1,34 +1,12 @@
-import {onCall, onRequest, HttpsError, CallableRequest} from 'firebase-functions/v2/https';
-import {initializeApp} from 'firebase-admin/app';
-import {getFirestore} from 'firebase-admin/firestore';
-import {FieldValue} from 'firebase-admin/firestore';
-import {defineSecret} from 'firebase-functions/params';
-import {createHmac} from 'node:crypto';
-import {Request, Response} from 'express';
+import * as functions from 'firebase-functions';
+import * as admin from 'firebase-admin';
+import {createHmac} from 'crypto';
 import * as nodemailer from 'nodemailer';
+import fetch from 'node-fetch';
 
-initializeApp();
+admin.initializeApp();
 
-const db = getFirestore();
-
-// Define secret parameter with different name to avoid conflicts
-const plisioApiSecret = defineSecret('PLISIO_API_SECRET');
-
-// NOWPayments secrets
-const nowPaymentsApiKey = defineSecret('NOWPAYMENTS_API_KEY');
-const nowPaymentsIpnSecret = defineSecret('NOWPAYMENTS_IPN_SECRET');
-
-// PaymentPoint secrets
-const paymentPointApiKey = defineSecret('PAYMENTPOINT_API_KEY');
-const paymentPointSecretKey = defineSecret('PAYMENTPOINT_SECRET_KEY');
-const paymentPointBusinessId = defineSecret('PAYMENTPOINT_BUSINESS_ID');
-
-// DaisySMS secret (CRITICAL: Move API key to server-side)
-const daisySmsApiKey = defineSecret('DAISYSMS_API_KEY');
-
-// SMTP Email Configuration
-const smtpUser = defineSecret('SMTP_USER');
-const smtpPassword = defineSecret('SMTP_PASSWORD');
+const db = admin.firestore();
 
 interface PlisioInvoiceResponse {
   status: string;
@@ -151,68 +129,53 @@ interface PaymentPointWebhookData {
   timestamp: string;
 }
 
-// PaymentPoint Virtual Account Creation
-export const createPaymentPointVirtualAccount = onCall({
-  cors: true,
-  secrets: [paymentPointApiKey, paymentPointSecretKey, paymentPointBusinessId]
-}, async (request: CallableRequest) => {
-  const { data, auth } = request;
-  
+// PaymentPoint Virtual Account Creation - Fixed Version
+export const createPaymentPointVirtualAccount = functions.https.onCall(async (data, context) => {
   try {
     // Validate authentication
-    if (!auth) {
-      throw new HttpsError('unauthenticated', 'User must be authenticated');
+    if (!context.auth) {
+      throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
     }
 
     const { userId, customerName, customerEmail, customerPhone } = data;
 
     // Validate required fields
     if (!userId || !customerName || !customerEmail) {
-      throw new HttpsError('invalid-argument', 'Missing required fields: userId, customerName, customerEmail');
+      throw new functions.https.HttpsError('invalid-argument', 'Missing required fields: userId, customerName, customerEmail');
     }
     
     // Verify user owns this request
-    if (auth.uid !== userId) {
-      throw new HttpsError('permission-denied', 'User ID does not match authenticated user');
+    if (context.auth.uid !== userId) {
+      throw new functions.https.HttpsError('permission-denied', 'User ID does not match authenticated user');
     }
 
     // Check if user already has a PaymentPoint account
     const existingAccount = await db.collection('paymentpoint_accounts').doc(userId).get();
     if (existingAccount.exists) {
-      const accountData = existingAccount.data()!;
+      const accountData = existingAccount.data();
       return {
         success: true,
         message: 'Account already exists',
         account: {
-          accountNumber: accountData.accountNumber,
-          accountName: accountData.accountName,
-          bankName: accountData.bankName,
+          accountNumber: accountData?.accountNumber,
+          accountName: accountData?.accountName,
+          bankName: accountData?.bankName,
           isPermanent: true
         }
       };
     }
 
-    // Get API credentials
-    const apiKey = paymentPointApiKey.value();
-    const secretKey = paymentPointSecretKey.value();
-    const businessId = paymentPointBusinessId.value();
-    
-    console.log('PaymentPoint credentials check:', { 
-      hasApiKey: !!apiKey, 
-      hasSecretKey: !!secretKey, 
-      hasBusinessId: !!businessId,
-      apiKeyLength: apiKey ? apiKey.length : 0,
-      secretKeyLength: secretKey ? secretKey.length : 0,
-      businessIdLength: businessId ? businessId.length : 0
-    });
+    // 🔑 Load API key from Firebase config
+    const apiKey = functions.config().paymentpoint?.key;
+    const secretKey = functions.config().paymentpoint?.secret;
+    const businessId = functions.config().paymentpoint?.business_id;
     
     if (!apiKey || !secretKey || !businessId) {
-      console.error('PaymentPoint credentials missing:', { 
-        hasApiKey: !!apiKey, 
-        hasSecretKey: !!secretKey, 
-        hasBusinessId: !!businessId 
-      });
-      throw new HttpsError('failed-precondition', 'PaymentPoint API credentials are not properly configured in Firebase secrets. Please contact admin to verify the API keys.');
+      console.error("❌ PaymentPoint credentials missing from Firebase config");
+      throw new functions.https.HttpsError(
+        "internal",
+        "PaymentPoint API credentials are not configured. Please contact admin to set up the service."
+      );
     }
 
     console.log('Creating PaymentPoint virtual account for user:', userId);
@@ -222,21 +185,19 @@ export const createPaymentPointVirtualAccount = onCall({
       email: customerEmail,
       name: customerName,
       phoneNumber: customerPhone || '08000000000',
-      bankCode: ['20946', '20897'], // Palmpay and Opay bank codes
+      bankCode: ['20946'], // Palmpay bank code only
       businessId: businessId.trim()
     };
 
     console.log('PaymentPoint API request:', JSON.stringify(requestBody, null, 2));
 
-    // Make API call to PaymentPoint with correct headers from documentation
-    const response = await fetch('https://api.paymentpoint.co/api/v1/createVirtualAccount', {
+    // 🌍 API endpoint (corrected URL)
+    const response = await fetch('https://api.paymentpoint.ng/api/v1/createVirtualAccount', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${secretKey.trim()}`,
-        'api-key': apiKey.trim(),
-        'Accept': 'application/json',
-        'User-Agent': 'InstantNums/1.0'
+        'Authorization': `Bearer ${secretKey.trim()}`, // ✅ Bearer prefix is required
+        'X-API-Key': apiKey.trim()
       },
       body: JSON.stringify(requestBody)
     });
@@ -255,14 +216,15 @@ export const createPaymentPointVirtualAccount = onCall({
       }
       
       throw new HttpsError('internal', `PaymentPoint API error: ${response.status} - ${errorData.message || errorText}`);
+      throw new functions.https.HttpsError('internal', `PaymentPoint API error: ${response.status} - ${errorData.message || errorText}`);
     }
 
-    const result: PaymentPointVirtualAccountResponse = await response.json();
+    const result = await response.json() as PaymentPointVirtualAccountResponse;
     console.log('PaymentPoint API response:', JSON.stringify(result, null, 2));
       
     if (result.status !== 'success' || !result.bankAccounts || result.bankAccounts.length === 0) {
       console.error('PaymentPoint invalid response:', result);
-      throw new HttpsError('internal', result.message || 'Failed to create virtual account');
+      throw new functions.https.HttpsError('internal', result.message || 'Failed to create virtual account');
     }
 
     const bankAccount = result.bankAccounts[0];
@@ -279,7 +241,7 @@ export const createPaymentPointVirtualAccount = onCall({
       customerPhone: customerPhone || null,
       paymentPointCustomerId: result.customer.customer_id,
       reservedAccountId: bankAccount.Reserved_Account_Id,
-      createdAt: FieldValue.serverTimestamp(),
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
       isActive: true,
       provider: 'paymentpoint'
     };
@@ -301,22 +263,19 @@ export const createPaymentPointVirtualAccount = onCall({
 
   } catch (error) {
     console.error('Error creating PaymentPoint virtual account:', error);
-    if (error instanceof HttpsError) {
+    if (error instanceof functions.https.HttpsError) {
       throw error;
     }
-    throw new HttpsError('internal', `Failed to create virtual account: ${error}`);
+    throw new functions.https.HttpsError('internal', `Failed to create virtual account: ${error}`);
   }
 });
 
-// PaymentPoint Webhook Handler
-export const paymentPointWebhook = onRequest({
-  cors: true,
-  secrets: [paymentPointSecretKey]
-}, async (req: Request, res: Response) => {
+// PaymentPoint Webhook Handler - Fixed Version
+export const paymentPointWebhook = functions.https.onRequest(async (req, res) => {
   // Set CORS headers
   res.set('Access-Control-Allow-Origin', '*');
   res.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-paymentpoint-signature');
+  res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-PaymentPoint-Signature');
 
   // Handle preflight requests
   if (req.method === 'OPTIONS') {
@@ -331,7 +290,7 @@ export const paymentPointWebhook = onRequest({
 
     // Validate webhook signature
     const signature = req.headers['x-paymentpoint-signature'] as string;
-    const secretKey = paymentPointSecretKey.value();
+    const secretKey = functions.config().paymentpoint?.secret;
     
     if (secretKey && signature) {
       const expectedSignature = createHmac('sha256', secretKey)
@@ -345,7 +304,7 @@ export const paymentPointWebhook = onRequest({
       }
     }
 
-    const webhookData: PaymentPointWebhookData = req.body;
+    const webhookData = req.body as PaymentPointWebhookData;
 
     // Process successful payments only
     if (webhookData.notification_status === 'payment_successful' && 
@@ -390,8 +349,8 @@ export const paymentPointWebhook = onRequest({
 
       // Credit user's wallet
       await db.collection('users').doc(userId).update({
-        walletBalanceNGN: FieldValue.increment(finalAmount),
-        lastUpdated: FieldValue.serverTimestamp()
+        walletBalanceNGN: admin.firestore.FieldValue.increment(finalAmount),
+        lastUpdated: admin.firestore.FieldValue.serverTimestamp()
       });
 
       // Create transaction record
@@ -410,7 +369,7 @@ export const paymentPointWebhook = onRequest({
         description: `PaymentPoint bank transfer - ₦${amount.toLocaleString()}`,
         transactionId: webhookData.transaction_id,
         webhookData: webhookData,
-        createdAt: FieldValue.serverTimestamp()
+        createdAt: admin.firestore.FieldValue.serverTimestamp()
       });
 
       console.log(`PaymentPoint payment processed: User ${userId}, credited ₦${finalAmount.toFixed(2)}`);
@@ -420,10 +379,10 @@ export const paymentPointWebhook = onRequest({
         try {
           const userDoc = await db.collection('users').doc(userId).get();
           if (userDoc.exists) {
-            const userData = userDoc.data()!;
+            const userData = userDoc.data();
             const referredBy = userData.referredBy;
             
-            if (referredBy && !userData.referralEarningsPaid) {
+            if (referredBy && !userData?.referralEarningsPaid) {
               const referrerSnapshot = await db.collection('users')
                 .where('referralCode', '==', referredBy)
                 .limit(1)
@@ -438,8 +397,8 @@ export const paymentPointWebhook = onRequest({
                 
                 // Update referrer's earnings
                 await db.collection('users').doc(referrerId).update({
-                  referralEarningsAvailable: (referrerData.referralEarningsAvailable || 0) + REFERRAL_BONUS,
-                  referralEarningsTotal: (referrerData.referralEarningsTotal || 0) + REFERRAL_BONUS
+                  referralEarningsAvailable: (referrerData?.referralEarningsAvailable || 0) + REFERRAL_BONUS,
+                  referralEarningsTotal: (referrerData?.referralEarningsTotal || 0) + REFERRAL_BONUS
                 });
                 
                 // Mark referral as paid
@@ -453,7 +412,7 @@ export const paymentPointWebhook = onRequest({
                   referredUserId: userId,
                   amount: REFERRAL_BONUS,
                   depositAmount: amount,
-                  createdAt: FieldValue.serverTimestamp(),
+                  createdAt: admin.firestore.FieldValue.serverTimestamp(),
                   status: 'earned'
                 });
                 
@@ -471,8 +430,8 @@ export const paymentPointWebhook = onRequest({
         const pointsToAward = Math.floor(finalAmount / 10);
         if (pointsToAward > 0) {
           await db.collection('users').doc(userId).update({
-            loyaltyPoints: FieldValue.increment(pointsToAward),
-            totalLoyaltyPoints: FieldValue.increment(pointsToAward)
+            loyaltyPoints: admin.firestore.FieldValue.increment(pointsToAward),
+            totalLoyaltyPoints: admin.firestore.FieldValue.increment(pointsToAward)
           });
           
           await db.collection('loyaltyTransactions').add({
@@ -480,7 +439,7 @@ export const paymentPointWebhook = onRequest({
             action: 'deposit',
             points: pointsToAward,
             amount: finalAmount,
-            createdAt: FieldValue.serverTimestamp()
+            createdAt: admin.firestore.FieldValue.serverTimestamp()
           });
           
           console.log(`Loyalty points awarded: ${pointsToAward} points`);
