@@ -54,7 +54,6 @@ export function WalletPage() {
   const [showPlisioModal, setShowPlisioModal] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showConversionModal, setShowConversionModal] = useState(false);
-  const [showConversionModal, setShowConversionModal] = useState(false);
   const [showBalance, setShowBalance] = useState(true);
   const [exchangeRate, setExchangeRate] = useState(1600);
   const [convertingCurrency, setConvertingCurrency] = useState(false);
