@@ -35,7 +35,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
 
-  const navigation = [
+  // Different navigation for admin vs regular users
+  const regularNavigation = [
     { name: 'Dashboard', href: '/dashboard', icon: Home },
     { name: 'Fund Wallet', href: '/dashboard/wallet', icon: Wallet },
     { name: 'Buy Numbers', href: '/dashboard/numbers', icon: Phone },
@@ -46,7 +47,20 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     { name: 'FAQs', href: '/dashboard/faqs', icon: HelpCircle },
   ];
 
+  const adminNavigation = [
+    { name: 'Admin Overview', href: '/admin', icon: Shield },
+    { name: 'User Management', href: '/admin?tab=users', icon: Users },
+    { name: 'Manual Payments', href: '/admin?tab=payments', icon: DollarSign },
+    { name: 'SMS Management', href: '/admin?tab=sms', icon: Activity },
+    { name: 'Financial Reports', href: '/admin?tab=financial', icon: DollarSign },
+    { name: 'Support Tickets', href: '/admin?tab=support', icon: Bell },
+    { name: 'Security & Logs', href: '/admin?tab=security', icon: Shield },
+    { name: 'API Management', href: '/admin?tab=api', icon: Globe },
+    { name: 'System Config', href: '/admin?tab=config', icon: Settings },
+  ];
 
+  // Choose navigation based on user role
+  const navigation = user?.isAdmin ? adminNavigation : regularNavigation;
 
   useEffect(() => {
     if (user) {
