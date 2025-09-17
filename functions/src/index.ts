@@ -4,7 +4,15 @@ import { createHmac } from 'crypto';
 import * as nodemailer from 'nodemailer';
 
 // Use v1 Firebase Functions for simpler deployment
-const HttpsError = functions.https.HttpsError;
+
+// Define the context type for v1 Firebase Functions
+interface CallableContext {
+  auth?: {
+    uid: string;
+    token: any;
+  };
+  rawRequest: any;
+}
 
 admin.initializeApp();
 
@@ -139,7 +147,7 @@ interface PaymentPointWebhookData {
 }
 
 // PaymentPoint Virtual Account Creation using Firebase Config
-export const createPaymentPointVirtualAccount = functions.https.onCall(async (data: any, context: functions.https.CallableContext) => {
+export const createPaymentPointVirtualAccount = functions.https.onCall(async (data: any, context: CallableContext) => {
   try {
     // Validate authentication
     if (!context || !context.auth) {
@@ -458,7 +466,7 @@ export const paymentPointWebhook = functions.https.onRequest(async (req: any, re
 });
 
 // Send notification email
-export const sendNotificationEmail = functions.https.onCall(async (data: any, context: functions.https.CallableContext) => {
+export const sendNotificationEmail = functions.https.onCall(async (data: any, context: CallableContext) => {
   
   try {
     // Some notifications don't require authentication (e.g., admin alerts)
@@ -482,7 +490,7 @@ export const sendNotificationEmail = functions.https.onCall(async (data: any, co
     }
 
     // Configure nodemailer transporter
-    const transporter = nodemailer.createTransport({
+    const transporter = nodemailer.createTransporter({
       service: 'gmail',
       auth: {
         user: smtpUserEmail,
@@ -687,7 +695,7 @@ export const nowPaymentsWebhook = functions.https.onRequest(async (req: any, res
 });
 
 // Get NOWPayments payment status
-export const getNOWPaymentStatus = functions.https.onCall(async (data: any, context: functions.https.CallableContext) => {
+export const getNOWPaymentStatus = functions.https.onCall(async (data: any, context: CallableContext) => {
   
   try {
     // Verify user is authenticated
@@ -813,7 +821,7 @@ export const getNOWPaymentStatus = functions.https.onCall(async (data: any, cont
 });
 
 // Affiliate program functions
-export const processReferralEarnings = functions.https.onCall(async (data: any, context: functions.https.CallableContext) => {
+export const processReferralEarnings = functions.https.onCall(async (data: any, context: CallableContext) => {
   
   try {
     if (!context || !context.auth) {
@@ -883,7 +891,7 @@ export const processReferralEarnings = functions.https.onCall(async (data: any, 
 });
 
 // Loyalty program functions
-export const awardLoyaltyPoints = functions.https.onCall(async (data: any, context: functions.https.CallableContext) => {
+export const awardLoyaltyPoints = functions.https.onCall(async (data: any, context: CallableContext) => {
   
   try {
     if (!context || !context.auth) {
@@ -941,7 +949,7 @@ export const awardLoyaltyPoints = functions.https.onCall(async (data: any, conte
 });
 
 // Redeem loyalty points
-export const redeemLoyaltyPoints = functions.https.onCall(async (data: any, context: functions.https.CallableContext) => {
+export const redeemLoyaltyPoints = functions.https.onCall(async (data: any, context: CallableContext) => {
   
   try {
     if (!context || !context.auth) {
@@ -991,7 +999,7 @@ export const redeemLoyaltyPoints = functions.https.onCall(async (data: any, cont
 });
 
 // Secure DaisySMS API proxy (protects API key)
-export const daisySmsProxy = functions.https.onCall(async (data: any, context: functions.https.CallableContext) => {
+export const daisySmsProxy = functions.https.onCall(async (data: any, context: CallableContext) => {
   
   try {
     // Verify user is authenticated
