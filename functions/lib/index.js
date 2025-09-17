@@ -33,7 +33,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.daisySmsWebhook = exports.daisySmsProxy = exports.redeemLoyaltyPoints = exports.awardLoyaltyPoints = exports.processReferralEarnings = exports.getNOWPaymentStatus = exports.nowPaymentsWebhook = exports.sendNotificationEmail = exports.paymentPointWebhook = exports.createPaymentPointVirtualAccount = void 0;
+exports.daisySmsWebhook = exports.daisySmsProxy = exports.redeemLoyaltyPoints = exports.awardLoyaltyPoints = exports.processReferralEarnings = exports.getNOWPaymentStatus = exports.nowPaymentsWebhook = exports.sendNotificationEmail = exports.paymentPointWebhook = exports.createPaymentPointVirtualAccount = exports.getReferrals = void 0;
 const https_1 = require("firebase-functions/v2/https");
 const app_1 = require("firebase-admin/app");
 const firestore_1 = require("firebase-admin/firestore");
@@ -43,6 +43,64 @@ const node_crypto_1 = require("node:crypto");
 const nodemailer = __importStar(require("nodemailer"));
 (0, app_1.initializeApp)();
 const db = (0, firestore_1.getFirestore)();
+// Get user's referral data securely
+exports.getReferrals = (0, https_1.onCall)({
+    cors: true
+}, async (request) => {
+    const { auth } = request;
+    try {
+        // Verify user is authenticated
+        if (!auth) {
+            throw new https_1.HttpsError('unauthenticated', 'User must be authenticated');
+        }
+        const userId = auth.uid;
+        // Get user's referral code
+        const userDoc = await db.collection('users').doc(userId).get();
+        if (!userDoc.exists) {
+            throw new https_1.HttpsError('not-found', 'User not found');
+        }
+        const userData = userDoc.data();
+        const referralCode = userData.referralCode;
+        if (!referralCode) {
+            throw new https_1.HttpsError('not-found', 'User has no referral code');
+        }
+        // Get referrals made by this user (admin privileges allow this query)
+        const referralsSnapshot = await db.collection('users')
+            .where('referredBy', '==', referralCode)
+            .get();
+        const referrals = referralsSnapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                id: doc.id,
+                email: data.email || 'Unknown',
+                status: (data.totalDepositNGN || 0) >= 1000 ? 'qualified' : 'pending',
+                depositAmount: data.totalDepositNGN || 0,
+                earnedAmount: (data.totalDepositNGN || 0) >= 1000 ? 100 : 0,
+                joinedAt: data.createdAt || new Date()
+            };
+        });
+        const qualifiedReferrals = referrals.filter(r => r.status === 'qualified');
+        const pendingReferrals = referrals.filter(r => r.status === 'pending');
+        return {
+            success: true,
+            data: {
+                referralCode,
+                referralCount: referrals.length,
+                referralEarnings: userData.referralEarningsAvailable || 0,
+                pendingEarnings: pendingReferrals.length * 100,
+                totalEarned: userData.referralEarningsTotal || 0,
+                referrals
+            }
+        };
+    }
+    catch (error) {
+        console.error('Error fetching referrals:', error);
+        if (error instanceof https_1.HttpsError) {
+            throw error;
+        }
+        throw new https_1.HttpsError('internal', 'Failed to fetch referral data');
+    }
+});
 // Define secret parameter with different name to avoid conflicts
 const plisioApiSecret = (0, params_1.defineSecret)('PLISIO_API_SECRET');
 // NOWPayments secrets
@@ -96,13 +154,21 @@ exports.createPaymentPointVirtualAccount = (0, https_1.onCall)({
         const apiKey = paymentPointApiKey.value();
         const secretKey = paymentPointSecretKey.value();
         const businessId = paymentPointBusinessId.value();
+        console.log('PaymentPoint credentials check:', {
+            hasApiKey: !!apiKey,
+            hasSecretKey: !!secretKey,
+            hasBusinessId: !!businessId,
+            apiKeyLength: apiKey ? apiKey.length : 0,
+            secretKeyLength: secretKey ? secretKey.length : 0,
+            businessIdLength: businessId ? businessId.length : 0
+        });
         if (!apiKey || !secretKey || !businessId) {
             console.error('PaymentPoint credentials missing:', {
                 hasApiKey: !!apiKey,
                 hasSecretKey: !!secretKey,
                 hasBusinessId: !!businessId
             });
-            throw new https_1.HttpsError('failed-precondition', 'PaymentPoint credentials not configured. Please contact support.');
+            throw new https_1.HttpsError('failed-precondition', 'PaymentPoint API credentials are not properly configured in Firebase secrets. Please contact admin to verify the API keys.');
         }
         console.log('Creating PaymentPoint virtual account for user:', userId);
         // Prepare request body according to PaymentPoint documentation
@@ -110,17 +176,19 @@ exports.createPaymentPointVirtualAccount = (0, https_1.onCall)({
             email: customerEmail,
             name: customerName,
             phoneNumber: customerPhone || '08000000000',
-            bankCode: ['20946'], // Palmpay bank code only
+            bankCode: ['20946', '20897'], // Palmpay and Opay bank codes
             businessId: businessId.trim()
         };
         console.log('PaymentPoint API request:', JSON.stringify(requestBody, null, 2));
         // Make API call to PaymentPoint with correct headers from documentation
-        const response = await fetch('https://api.paymentpoint.ng/api/v1/createVirtualAccount', {
+        const response = await fetch('https://api.paymentpoint.co/api/v1/createVirtualAccount', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${secretKey.trim()}`,
-                'X-API-Key': apiKey.trim()
+                'api-key': apiKey.trim(),
+                'Accept': 'application/json',
+                'User-Agent': 'InstantNums/1.0'
             },
             body: JSON.stringify(requestBody)
         });
@@ -247,11 +315,18 @@ exports.paymentPointWebhook = (0, https_1.onRequest)({
             const feeAmount = amount * (feePercentage / 100);
             const finalAmount = amount - feeAmount;
             console.log(`Amount: ₦${amount}, Fee: ₦${feeAmount.toFixed(2)} (${feePercentage}%), Final: ₦${finalAmount.toFixed(2)}`);
-            // Credit user's wallet
-            await db.collection('users').doc(userId).update({
+            // Credit user's wallet (create document if it doesn't exist)
+            await db.collection('users').doc(userId).set({
                 walletBalanceNGN: firestore_2.FieldValue.increment(finalAmount),
-                lastUpdated: firestore_2.FieldValue.serverTimestamp()
-            });
+                lastUpdated: firestore_2.FieldValue.serverTimestamp(),
+                // Add default values for new users
+                walletBalance: 0,
+                email: webhookData.customer.email,
+                name: webhookData.customer.name,
+                isAdmin: false,
+                isBlocked: false,
+                createdAt: firestore_2.FieldValue.serverTimestamp()
+            }, { merge: true }); // merge: true will update existing or create new
             // Create transaction record
             await db.collection('transactions').add({
                 userId: userId,
@@ -598,7 +673,7 @@ exports.getNOWPaymentStatus = (0, https_1.onCall)({
                         currency: paymentData.payCurrency,
                         payAddress: paymentData.payAddress,
                         status: paymentData.status,
-                        purchaseId: paymentData.purchaseId
+                        bankCode: ['20946', '20897'], // Both Palmpay and Opay as per docs
                     }
                 };
             }
