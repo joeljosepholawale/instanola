@@ -14,12 +14,13 @@ import {
   HelpCircle,
   Gift,
   Home,
-  CreditCard
+  CreditCard,
   Shield,
   Users,
   DollarSign,
   Activity,
   Bell
+} from 'lucide-react';
 import { Logo } from '../ui/Logo';
 import { useAuth } from '../../hooks/useAuth';
 import { signOut } from 'firebase/auth';
