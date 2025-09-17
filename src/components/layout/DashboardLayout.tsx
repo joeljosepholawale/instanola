@@ -19,7 +19,8 @@ import {
   Users,
   DollarSign,
   Activity,
-  Bell
+  Bell,
+  MessageSquare
 } from 'lucide-react';
 import { Logo } from '../ui/Logo';
 import { useAuth } from '../../hooks/useAuth';
