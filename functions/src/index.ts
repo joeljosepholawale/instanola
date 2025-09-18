@@ -86,6 +86,100 @@ const plisioApiSecret = defineSecret('PLISIO_API_SECRET');
 const nowPaymentsApiKey = defineSecret('NOWPAYMENTS_API_KEY');
 const nowPaymentsIpnSecret = defineSecret('NOWPAYMENTS_IPN_SECRET');
 
+// Create NOWPayments payment
+export const createNOWPayment = onCall({
+  cors: true,
+  secrets: [nowPaymentsApiKey]
+}, async (request: CallableRequest) => {
+  const { data, auth } = request;
+  
+  try {
+    // Verify user is authenticated
+    if (!auth) {
+      throw new HttpsError('unauthenticated', 'User must be authenticated');
+    }
+
+    const { userId, amount, currency, userEmail, userName } = data;
+
+    if (auth.uid !== userId) {
+      throw new HttpsError('permission-denied', 'Unauthorized access');
+    }
+
+    if (!amount || amount < 2 || amount > 10000) {
+      throw new HttpsError('invalid-argument', 'Amount must be between $2 and $10,000');
+    }
+
+    const apiKey = nowPaymentsApiKey.value();
+    if (!apiKey) {
+      throw new HttpsError('failed-precondition', 'NOWPayments API key not configured');
+    }
+
+    const orderId = `nowpay_${userId}_${Date.now()}`;
+
+    // Create payment via NOWPayments API
+    const response = await fetch('https://api.nowpayments.io/v1/payment', {
+      method: 'POST',
+      headers: {
+        'x-api-key': apiKey,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        price_amount: amount,
+        price_currency: 'usd',
+        pay_currency: currency.toLowerCase(),
+        order_id: orderId,
+        order_description: `InstantNums wallet deposit - $${amount}`,
+        ipn_callback_url: 'https://us-central1-instantnums-48c6e.cloudfunctions.net/nowPaymentsWebhook'
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('NOWPayments API error:', response.status, errorText);
+      throw new HttpsError('internal', `NOWPayments API error: ${response.status}`);
+    }
+
+    const result = await response.json();
+
+    // Store payment in Firestore
+    await db.collection('nowpayments_payments').doc(orderId).set({
+      userId: userId,
+      userEmail: userEmail || '',
+      userName: userName || '',
+      amount: amount,
+      currency: currency,
+      paymentId: result.payment_id,
+      payAddress: result.pay_address,
+      payAmount: result.pay_amount,
+      payCurrency: result.pay_currency,
+      status: result.payment_status,
+      orderId: orderId,
+      createdAt: FieldValue.serverTimestamp(),
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days
+    });
+
+    return {
+      success: true,
+      payment: {
+        id: orderId,
+        paymentId: result.payment_id,
+        amount: result.pay_amount,
+        currency: result.pay_currency,
+        payAddress: result.pay_address,
+        status: result.payment_status,
+        purchaseId: result.purchase_id
+      }
+    };
+
+  } catch (error) {
+    console.error('Error creating NOWPayments payment:', error);
+    if (error instanceof HttpsError) {
+      throw error;
+    }
+    throw new HttpsError('internal', 'Failed to create NOWPayments payment');
+  }
+});
+
 // PaymentPoint secrets
 const paymentPointApiKey = defineSecret('PAYMENTPOINT_API_KEY');
 const paymentPointSecretKey = defineSecret('PAYMENTPOINT_SECRET_KEY');
@@ -601,7 +695,7 @@ export const sendNotificationEmail = onCall({
     }
 
     // Configure nodemailer transporter
-    const transporter = nodemailer.createTransport({
+    const transporter = nodemailer.createTransporter({
       service: 'gmail',
       auth: {
         user: smtpUserEmail,
