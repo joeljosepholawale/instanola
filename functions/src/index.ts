@@ -601,7 +601,7 @@ export const sendNotificationEmail = onCall({
     }
 
     // Configure nodemailer transporter
-    const transporter = nodemailer.createTransporter({
+    const transporter = nodemailer.createTransport({
       service: 'gmail',
       auth: {
         user: smtpUserEmail,
@@ -1129,7 +1129,6 @@ export const getNOWPaymentStatus = onCall({
             currency: paymentData.payCurrency,
             payAddress: paymentData.payAddress,
             status: paymentData.status,
-          bankCode: ['20946', '20897'], // Both Palmpay and Opay as per docs
           }
         };
       }
