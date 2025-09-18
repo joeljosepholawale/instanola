@@ -13,7 +13,7 @@
     match /config/{configId} {
       // Only allow authenticated users to read specific non-sensitive configs
       allow read: if request.auth != null && 
-        configId in ['pricing', 'currency', 'custom_pricing', 'system'] &&
+        configId in ['pricing', 'currency', 'custom_pricing', 'system', 'email'] &&
         configId != 'api_keys' && configId != 'daisysms'; // Block sensitive API data
       // Allow admins to read/write all configs  
       allow read, write: if request.auth != null && 
