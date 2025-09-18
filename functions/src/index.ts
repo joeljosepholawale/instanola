@@ -601,13 +601,23 @@ export const sendNotificationEmail = onCall({
     }
 
     // Configure nodemailer transporter
-    const transporter = nodemailer.createTransport({
-      service: 'gmail',
-      auth: {
-        user: smtpUserEmail,
-        pass: smtpPass
-      }
-    });
+    let transporter;
+    try {
+      transporter = nodemailer.createTransporter({
+        service: 'gmail',
+        auth: {
+          user: smtpUserEmail,
+          pass: smtpPass
+        }
+      });
+      
+      // Test the connection
+      await transporter.verify();
+    } catch (smtpError) {
+      console.error('SMTP configuration error:', smtpError);
+      throw new HttpsError('failed-precondition', 
+        'Email service is not properly configured. Please contact admin to update SMTP credentials.');
+    }
 
     // Prepare email content based on type
     let subject = '';
