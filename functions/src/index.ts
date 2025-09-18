@@ -602,7 +602,7 @@ export const sendNotificationEmail = onCall({
 
     // Configure nodemailer transporter
     const transporter = nodemailer.createTransporter({
-      service: 'gmail',
+      const transporter = nodemailer.createTransport({
       auth: {
         user: smtpUserEmail,
         pass: smtpPass
@@ -973,7 +973,7 @@ export const createNOWPayment = onCall({
       price_amount: amount,
       price_currency: 'USD',
       pay_currency: currency.toUpperCase(),
-      ipn_callback_url: `https://us-central1-${functions.config().projectId || 'instantnums-48c6e'}.cloudfunctions.net/nowPaymentsWebhook`,
+      ipn_callback_url: `https://us-central1-instantnums-48c6e.cloudfunctions.net/nowPaymentsWebhook`,
       order_id: orderId, 
       purchase_id: purchaseId,
       order_description: `InstantNums wallet deposit - $${amount} USD`
