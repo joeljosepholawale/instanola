@@ -601,23 +601,13 @@ export const sendNotificationEmail = onCall({
     }
 
     // Configure nodemailer transporter
-    let transporter;
-    try {
-      transporter = nodemailer.createTransporter({
-        service: 'gmail',
-        auth: {
-          user: smtpUserEmail,
-          pass: smtpPass
-        }
-      });
-      
-      // Test the connection
-      await transporter.verify();
-    } catch (smtpError) {
-      console.error('SMTP configuration error:', smtpError);
-      throw new HttpsError('failed-precondition', 
-        'Email service is not properly configured. Please contact admin to update SMTP credentials.');
-    }
+    const transporter = nodemailer.createTransporter({
+      service: 'gmail',
+      auth: {
+        user: smtpUserEmail,
+        pass: smtpPass
+      }
+    });
 
     // Prepare email content based on type
     let subject = '';
@@ -975,19 +965,18 @@ export const createNOWPayment = onCall({
     console.log('Creating NOWPayments payment for user:', userId);
 
     // Generate unique order ID
-    const orderId = `nowpay_${userId}_${Date.now()}`;
+    const orderId = `nowpayments_${userId}_${Date.now()}`;
+    const purchaseId = Date.now(); // Use timestamp as numeric purchase_id
 
     // Prepare request body for NOWPayments API
     const requestBody = {
       price_amount: amount,
       price_currency: 'USD',
-      pay_currency: currency,
-      order_id: orderId,
-      order_description: `InstantNums wallet deposit - $${amount}`,
-      purchase_id: `purchase_${Date.now()}`,
-      ipn_callback_url: `${process.env.FUNCTIONS_EMULATOR === 'true' ? 'http://localhost:5001' : 'https://us-central1-your-project-id.cloudfunctions.net'}/nowPaymentsWebhook`,
-      success_url: 'https://instantnums.com/dashboard/wallet?payment=success',
-      cancel_url: 'https://instantnums.com/dashboard/wallet?payment=cancelled'
+      pay_currency: currency.toUpperCase(),
+      ipn_callback_url: `https://us-central1-${functions.config().projectId || 'instantnums-48c6e'}.cloudfunctions.net/nowPaymentsWebhook`,
+      order_id: orderId, 
+      purchase_id: purchaseId,
+      order_description: `InstantNums wallet deposit - $${amount} USD`
     };
 
     console.log('NOWPayments API request:', JSON.stringify(requestBody, null, 2));
