@@ -59,7 +59,6 @@ export function WalletPage() {
   const [convertingCurrency, setConvertingCurrency] = useState(false);
   const [conversionAmount, setConversionAmount] = useState('');
   const [conversionDirection, setConversionDirection] = useState<'usd-to-ngn' | 'ngn-to-usd'>('usd-to-ngn');
-  const [serviceStatus, setServiceStatus] = useState<'operational' | 'degraded' | 'outage'>('operational');
 
   useEffect(() => {
     if (user) {
