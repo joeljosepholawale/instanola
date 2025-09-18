@@ -23,6 +23,7 @@ import {
   MessageSquare
 } from 'lucide-react';
 import { Logo } from '../ui/Logo';
+import { SupportModal } from '../ui/SupportModal';
 import { useAuth } from '../../hooks/useAuth';
 import { signOut } from 'firebase/auth';
 import { auth, db } from '../../lib/firebase';
@@ -40,6 +41,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
+  const [showSupportModal, setShowSupportModal] = useState(false);
 
   // Different navigation for admin vs regular users
   const regularNavigation = [
@@ -128,18 +130,31 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                   
                   return (
                     <li key={item.name}>
-                      <Link
-                        to={item.href}
-                        onClick={() => setSidebarOpen(false)}
-                        className={`flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${
-                          isActive
-                            ? 'bg-blue-50 text-blue-700 border-l-4 border-blue-700 shadow-sm'
-                            : 'text-gray-700 hover:text-blue-700 hover:bg-gray-50'
-                        }`}
-                      >
-                        <Icon className={`w-5 h-5 mr-4 ${isActive ? 'text-blue-600' : 'text-gray-500'}`} />
-                        {item.name}
-                      </Link>
+                      {item.action === 'support' ? (
+                        <button
+                          onClick={() => {
+                            setSidebarOpen(false);
+                            setShowSupportModal(true);
+                          }}
+                          className="w-full flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 text-gray-700 hover:text-blue-700 hover:bg-gray-50"
+                        >
+                          <Icon className="w-5 h-5 mr-4 text-gray-500" />
+                          {item.name}
+                        </button>
+                      ) : (
+                        <Link
+                          to={item.href}
+                          onClick={() => setSidebarOpen(false)}
+                          className={`flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${
+                            isActive
+                              ? 'bg-blue-50 text-blue-700 border-l-4 border-blue-700 shadow-sm'
+                              : 'text-gray-700 hover:text-blue-700 hover:bg-gray-50'
+                          }`}
+                        >
+                          <Icon className={`w-5 h-5 mr-4 ${isActive ? 'text-blue-600' : 'text-gray-500'}`} />
+                          {item.name}
+                        </Link>
+                      )}
                     </li>
                   );
                 })}
@@ -279,6 +294,15 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           </div>
         </div>
       </div>
+
+      {/* Support Modal */}
+      <SupportModal
+        isOpen={showSupportModal}
+        onClose={() => setShowSupportModal(false)}
+        onSuccess={() => {
+          setShowSupportModal(false);
+        }}
+      />
     </div>
   );
 }
