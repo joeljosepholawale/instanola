@@ -33,7 +33,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.daisySmsWebhook = exports.daisySmsProxy = exports.redeemLoyaltyPoints = exports.awardLoyaltyPoints = exports.processReferralEarnings = exports.getNOWPaymentStatus = exports.nowPaymentsWebhook = exports.sendNotificationEmail = exports.paymentPointWebhook = exports.createPaymentPointVirtualAccount = exports.getReferrals = void 0;
+exports.daisySmsWebhook = exports.daisySmsProxy = exports.redeemLoyaltyPoints = exports.awardLoyaltyPoints = exports.processReferralEarnings = exports.getNOWPaymentStatus = exports.createNOWPayment = exports.nowPaymentsWebhook = exports.sendNotificationEmail = exports.paymentPointWebhook = exports.createPaymentPointVirtualAccount = exports.getReferrals = void 0;
 const https_1 = require("firebase-functions/v2/https");
 const app_1 = require("firebase-admin/app");
 const firestore_1 = require("firebase-admin/firestore");
@@ -424,6 +424,7 @@ exports.sendNotificationEmail = (0, https_1.onCall)({
     cors: true,
     secrets: [smtpUser, smtpPassword]
 }, async (request) => {
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l;
     const { data, auth } = request;
     try {
         // Some notifications don't require authentication (e.g., admin alerts)
@@ -442,7 +443,9 @@ exports.sendNotificationEmail = (0, https_1.onCall)({
         }
         // Configure nodemailer transporter
         const transporter = nodemailer.createTransport({
-            service: 'gmail',
+            host: 'smtp.gmail.com',
+            port: 587,
+            secure: false,
             auth: {
                 user: smtpUserEmail,
                 pass: smtpPass
@@ -474,16 +477,129 @@ exports.sendNotificationEmail = (0, https_1.onCall)({
           <p>Best regards,<br>InstantNums Team</p>
         `;
                 break;
+            case 'transaction_confirmation':
+                const transaction = additionalData === null || additionalData === void 0 ? void 0 : additionalData.transaction;
+                subject = `Transaction Confirmation - ${((_a = transaction === null || transaction === void 0 ? void 0 : transaction.type) === null || _a === void 0 ? void 0 : _a.charAt(0).toUpperCase()) + ((_b = transaction === null || transaction === void 0 ? void 0 : transaction.type) === null || _b === void 0 ? void 0 : _b.slice(1)) || 'Transaction'}`;
+                htmlContent = `
+          <h2>Hello ${(additionalData === null || additionalData === void 0 ? void 0 : additionalData.userName) || 'Valued Customer'},</h2>
+          <p>Your ${(transaction === null || transaction === void 0 ? void 0 : transaction.type) || 'transaction'} has been processed successfully.</p>
+          <div style="background: white; padding: 15px; border-radius: 8px; margin: 10px 0;">
+            <h3>Transaction Details</h3>
+            <p><strong>Type:</strong> ${((_c = transaction === null || transaction === void 0 ? void 0 : transaction.type) === null || _c === void 0 ? void 0 : _c.charAt(0).toUpperCase()) + ((_d = transaction === null || transaction === void 0 ? void 0 : transaction.type) === null || _d === void 0 ? void 0 : _d.slice(1)) || 'N/A'}</p>
+            <p><strong>Amount:</strong> <span style="font-size: 24px; font-weight: bold; color: #10B981;">$${((_e = transaction === null || transaction === void 0 ? void 0 : transaction.amount) === null || _e === void 0 ? void 0 : _e.toFixed(2)) || 'N/A'}</span></p>
+            <p><strong>Description:</strong> ${(transaction === null || transaction === void 0 ? void 0 : transaction.description) || 'N/A'}</p>
+            <p><strong>Date:</strong> ${((_f = transaction === null || transaction === void 0 ? void 0 : transaction.date) === null || _f === void 0 ? void 0 : _f.toLocaleString()) || new Date().toLocaleString()}</p>
+          </div>
+          <p>Thank you for using InstantNums!</p>
+        `;
+                break;
             case 'sms_received':
-                subject = 'SMS Code Received - InstantNums';
+                subject = `SMS Code Received - ${(additionalData === null || additionalData === void 0 ? void 0 : additionalData.service) || 'InstantNums'}`;
                 htmlContent = `
           <h2>SMS Code Received!</h2>
-          <p>You have received an SMS code for your rented number.</p>
+          <p>Hello ${(additionalData === null || additionalData === void 0 ? void 0 : additionalData.userName) || 'Valued Customer'},</p>
+          <p>You've received an SMS verification code for ${(additionalData === null || additionalData === void 0 ? void 0 : additionalData.service) || 'your service'}.</p>
           <p><strong>Number:</strong> ${(additionalData === null || additionalData === void 0 ? void 0 : additionalData.number) || 'N/A'}</p>
           <p><strong>Code:</strong> <span style="font-family: monospace; font-size: 18px; background: #f0f0f0; padding: 5px;">${(additionalData === null || additionalData === void 0 ? void 0 : additionalData.code) || 'N/A'}</span></p>
           <p><strong>Service:</strong> ${(additionalData === null || additionalData === void 0 ? void 0 : additionalData.service) || 'N/A'}</p>
           <br>
           <p>Best regards,<br>InstantNums Team</p>
+        `;
+                break;
+            case 'low_balance':
+                subject = 'Low Wallet Balance - InstantNums';
+                htmlContent = `
+          <h2>Hello ${(additionalData === null || additionalData === void 0 ? void 0 : additionalData.userName) || 'Valued Customer'},</h2>
+          <p>Your wallet balance is running low and may not be sufficient for future rentals.</p>
+          <div style="background: white; padding: 15px; border-radius: 8px; text-align: center; margin: 20px 0;">
+            <h3>Current Balance</h3>
+            <div style="font-size: 24px; font-weight: bold; color: #F59E0B;">$${((_g = additionalData === null || additionalData === void 0 ? void 0 : additionalData.currentBalance) === null || _g === void 0 ? void 0 : _g.toFixed(2)) || '0.00'}</div>
+          </div>
+          <p>To continue using our services without interruption, please add funds to your wallet.</p>
+          <div style="text-align: center;">
+            <a href="https://instantnums.com/dashboard/wallet" style="background: #1D4ED8; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">Add Funds Now</a>
+          </div>
+        `;
+                break;
+            case 'support_reply':
+                subject = `Re: ${(additionalData === null || additionalData === void 0 ? void 0 : additionalData.originalSubject) || 'Your Support Request'}`;
+                htmlContent = `
+          <h2>Hello ${(additionalData === null || additionalData === void 0 ? void 0 : additionalData.userName) || 'Valued Customer'},</h2>
+          <p>Thank you for contacting InstantNums support. We've reviewed your message and here's our response:</p>
+          <div style="background: white; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #1D4ED8;">
+            <h3>Re: ${(additionalData === null || additionalData === void 0 ? void 0 : additionalData.originalSubject) || 'Your Support Request'}</h3>
+            <div style="white-space: pre-wrap;">${(additionalData === null || additionalData === void 0 ? void 0 : additionalData.replyMessage) || 'Thank you for contacting us.'}</div>
+            <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #eee; color: #666;">
+              <p>Best regards,<br>
+              ${(additionalData === null || additionalData === void 0 ? void 0 : additionalData.adminName) || 'Support Team'}<br>
+              InstantNums Support Team</p>
+            </div>
+          </div>
+          <p>If you have any additional questions, please don't hesitate to contact us again.</p>
+        `;
+                break;
+            case 'payment_rejection':
+                const paymentData = additionalData === null || additionalData === void 0 ? void 0 : additionalData.paymentData;
+                subject = 'Payment Request Rejected - InstantNums';
+                htmlContent = `
+          <h2>Hello ${(additionalData === null || additionalData === void 0 ? void 0 : additionalData.userName) || 'Valued Customer'},</h2>
+          <p>We regret to inform you that your manual payment request has been rejected by our admin team.</p>
+          <div style="background: white; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #DC2626;">
+            <h3>Payment Details</h3>
+            <p><strong>Amount:</strong> ₦${((_h = paymentData === null || paymentData === void 0 ? void 0 : paymentData.amountNGN) === null || _h === void 0 ? void 0 : _h.toLocaleString()) || 'N/A'} (${((_j = paymentData === null || paymentData === void 0 ? void 0 : paymentData.amountUSD) === null || _j === void 0 ? void 0 : _j.toFixed(2)) || 'N/A'} USD)</p>
+            <p><strong>Reference:</strong> ${(paymentData === null || paymentData === void 0 ? void 0 : paymentData.transactionReference) || 'N/A'}</p>
+            <p><strong>Payment Method:</strong> ${((_k = paymentData === null || paymentData === void 0 ? void 0 : paymentData.paymentMethod) === null || _k === void 0 ? void 0 : _k.replace('_', ' ').toUpperCase()) || 'N/A'}</p>
+            <p><strong>Rejected On:</strong> ${((_l = paymentData === null || paymentData === void 0 ? void 0 : paymentData.rejectedAt) === null || _l === void 0 ? void 0 : _l.toLocaleString()) || new Date().toLocaleString()}</p>
+          </div>
+          <div style="background: #FEF2F2; border: 1px solid #FECACA; padding: 15px; border-radius: 8px; margin: 15px 0;">
+            <h3>Rejection Reason</h3>
+            <p>${(paymentData === null || paymentData === void 0 ? void 0 : paymentData.reason) || 'Please contact support for details.'}</p>
+          </div>
+          <p>If you believe this rejection was made in error, please contact our support team with additional documentation or clarification.</p>
+        `;
+                break;
+            case 'password_reset':
+                subject = 'Reset Your Password - InstantNums';
+                htmlContent = `
+          <h2>Hello ${(additionalData === null || additionalData === void 0 ? void 0 : additionalData.userName) || 'Valued Customer'},</h2>
+          <p>We received a request to reset your password for your InstantNums account.</p>
+          <p>Click the button below to reset your password:</p>
+          <div style="text-align: center;">
+            <a href="${(additionalData === null || additionalData === void 0 ? void 0 : additionalData.resetLink) || '#'}" style="background: #1D4ED8; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block; margin: 20px 0;">Reset My Password</a>
+          </div>
+          <p>Or copy and paste this link into your browser:</p>
+          <p style="word-break: break-all; background: #f0f0f0; padding: 10px; border-radius: 4px; font-family: monospace;">
+            ${(additionalData === null || additionalData === void 0 ? void 0 : additionalData.resetLink) || '#'}
+          </p>
+          <div style="background: #FEF3C7; border: 1px solid #F59E0B; padding: 15px; border-radius: 8px; margin: 15px 0;">
+            <strong>Security Notice:</strong>
+            <ul style="margin: 10px 0; padding-left: 20px;">
+              <li>This link expires in 1 hour</li>
+              <li>If you didn't request this reset, please ignore this email</li>
+              <li>Your password won't change until you create a new one</li>
+            </ul>
+          </div>
+          <p>If you have any questions, please contact our support team.</p>
+        `;
+                break;
+            case 'test_config':
+                subject = 'InstantNums - Email Configuration Test';
+                htmlContent = `
+          <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+            <div style="background: #10B981; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0;">
+              <h1>InstantNums</h1>
+              <p>Email Configuration Test</p>
+            </div>
+            <div style="padding: 20px; background: #f9f9f9; border-radius: 0 0 8px 8px;">
+              <div style="background: white; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #10B981;">
+                <h2>✅ Email Configuration Successful!</h2>
+                <p>This is a test email to verify that your email configuration is working correctly.</p>
+                <p><strong>Sent from:</strong> ${(additionalData === null || additionalData === void 0 ? void 0 : additionalData.fromName) || 'InstantNums'}</p>
+                <p><strong>Test completed at:</strong> ${new Date().toLocaleString()}</p>
+              </div>
+              <p>If you received this email, your email configuration is working properly and you can now send notifications to users.</p>
+            </div>
+          </div>
         `;
                 break;
             case 'admin_alert':
@@ -617,9 +733,123 @@ exports.nowPaymentsWebhook = (0, https_1.onRequest)({
         res.status(500).send('Internal server error');
     }
 });
+// Create NOWPayments payment
+exports.createNOWPayment = (0, https_1.onCall)({
+    cors: true,
+    secrets: [nowPaymentsApiKey]
+}, async (request) => {
+    const { data, auth } = request;
+    try {
+        // Verify user is authenticated
+        if (!auth) {
+            throw new https_1.HttpsError('unauthenticated', 'User must be authenticated');
+        }
+        const { userId, amount, currency, userEmail, userName } = data;
+        // Validate required fields
+        if (!userId || !amount || !currency) {
+            throw new https_1.HttpsError('invalid-argument', 'Missing required fields: userId, amount, currency');
+        }
+        // Verify user owns this request
+        if (auth.uid !== userId) {
+            throw new https_1.HttpsError('permission-denied', 'User ID does not match authenticated user');
+        }
+        // Validate amount
+        if (typeof amount !== 'number' || amount <= 0) {
+            throw new https_1.HttpsError('invalid-argument', 'Amount must be a positive number');
+        }
+        const apiKey = nowPaymentsApiKey.value();
+        if (!apiKey) {
+            throw new https_1.HttpsError('failed-precondition', 'NOWPayments API key not configured');
+        }
+        console.log('Creating NOWPayments payment for user:', userId);
+        // Generate unique order ID
+        const orderId = `nowpayments_${userId}_${Date.now()}`;
+        const purchaseId = Date.now(); // Use timestamp as numeric purchase_id
+        // Prepare request body for NOWPayments API
+        const requestBody = {
+            price_amount: amount,
+            price_currency: 'USD',
+            pay_currency: currency.toUpperCase(),
+            ipn_callback_url: `https://us-central1-instantnums-48c6e.cloudfunctions.net/nowPaymentsWebhook`,
+            order_id: orderId,
+            purchase_id: purchaseId,
+            order_description: `InstantNums wallet deposit - $${amount} USD`
+        };
+        console.log('NOWPayments API request:', JSON.stringify(requestBody, null, 2));
+        // Make API call to NOWPayments
+        const response = await fetch('https://api.nowpayments.io/v1/payment', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-api-key': apiKey,
+                'Accept': 'application/json',
+                'User-Agent': 'InstantNums/1.0'
+            },
+            body: JSON.stringify(requestBody)
+        });
+        console.log('NOWPayments API response status:', response.status);
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('NOWPayments API error:', response.status, errorText);
+            let errorData = {};
+            try {
+                errorData = JSON.parse(errorText);
+            }
+            catch (parseError) {
+                errorData = { message: errorText };
+            }
+            throw new https_1.HttpsError('internal', `NOWPayments API error: ${response.status} - ${errorData.message || errorText}`);
+        }
+        const result = await response.json();
+        console.log('NOWPayments API response:', JSON.stringify(result, null, 2));
+        if (!result.payment_id || !result.pay_address) {
+            console.error('NOWPayments invalid response:', result);
+            throw new https_1.HttpsError('internal', 'Invalid response from NOWPayments API');
+        }
+        // Store payment data in Firestore
+        const paymentData = {
+            userId: userId,
+            paymentId: result.payment_id,
+            orderId: orderId,
+            amount: amount,
+            currency: currency,
+            payCurrency: result.pay_currency,
+            payAmount: result.pay_amount,
+            payAddress: result.pay_address,
+            status: result.payment_status,
+            userEmail: userEmail,
+            userName: userName,
+            createdAt: firestore_2.FieldValue.serverTimestamp(),
+            provider: 'nowpayments',
+            isActive: true
+        };
+        await db.collection('nowpayments_payments').doc(orderId).set(paymentData);
+        console.log('NOWPayments payment created successfully:', orderId);
+        return {
+            success: true,
+            payment: {
+                id: orderId,
+                paymentId: result.payment_id,
+                amount: result.pay_amount,
+                currency: result.pay_currency,
+                payAddress: result.pay_address,
+                status: result.payment_status,
+                purchaseId: result.purchase_id
+            }
+        };
+    }
+    catch (error) {
+        console.error('Error creating NOWPayments payment:', error);
+        if (error instanceof https_1.HttpsError) {
+            throw error;
+        }
+        throw new https_1.HttpsError('internal', `Failed to create payment: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+});
 // Get NOWPayments payment status
 exports.getNOWPaymentStatus = (0, https_1.onCall)({
-    cors: true
+    cors: true,
+    secrets: [nowPaymentsApiKey]
 }, async (request) => {
     const { data, auth } = request;
     try {
@@ -673,7 +903,6 @@ exports.getNOWPaymentStatus = (0, https_1.onCall)({
                         currency: paymentData.payCurrency,
                         payAddress: paymentData.payAddress,
                         status: paymentData.status,
-                        bankCode: ['20946', '20897'], // Both Palmpay and Opay as per docs
                     }
                 };
             }
