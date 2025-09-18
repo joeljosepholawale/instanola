@@ -601,7 +601,7 @@ export const sendNotificationEmail = onCall({
     }
 
     // Configure nodemailer transporter
-    const transporter = nodemailer.createTransport({
+    const transporter = nodemailer.createTransporter({
       service: 'gmail',
       auth: {
         user: smtpUserEmail,
@@ -924,6 +924,141 @@ export const nowPaymentsWebhook = onRequest({
   } catch (error) {
     console.error('NOWPayments webhook error:', error);
     res.status(500).send('Internal server error');
+  }
+});
+
+// Create NOWPayments payment
+export const createNOWPayment = onCall({
+  cors: true,
+  secrets: [nowPaymentsApiKey]
+}, async (request: CallableRequest) => {
+  const { data, auth } = request;
+  
+  try {
+    // Verify user is authenticated
+    if (!auth) {
+      throw new HttpsError('unauthenticated', 'User must be authenticated');
+    }
+
+    const { userId, amount, currency, userEmail, userName } = data;
+
+    // Validate required fields
+    if (!userId || !amount || !currency) {
+      throw new HttpsError('invalid-argument', 'Missing required fields: userId, amount, currency');
+    }
+    
+    // Verify user owns this request
+    if (auth.uid !== userId) {
+      throw new HttpsError('permission-denied', 'User ID does not match authenticated user');
+    }
+
+    // Validate amount
+    if (typeof amount !== 'number' || amount <= 0) {
+      throw new HttpsError('invalid-argument', 'Amount must be a positive number');
+    }
+
+    const apiKey = nowPaymentsApiKey.value();
+    if (!apiKey) {
+      throw new HttpsError('failed-precondition', 'NOWPayments API key not configured');
+    }
+
+    console.log('Creating NOWPayments payment for user:', userId);
+
+    // Generate unique order ID
+    const orderId = `nowpay_${userId}_${Date.now()}`;
+
+    // Prepare request body for NOWPayments API
+    const requestBody = {
+      price_amount: amount,
+      price_currency: 'USD',
+      pay_currency: currency,
+      order_id: orderId,
+      order_description: `InstantNums wallet deposit - $${amount}`,
+      purchase_id: `purchase_${Date.now()}`,
+      ipn_callback_url: `${process.env.FUNCTIONS_EMULATOR === 'true' ? 'http://localhost:5001' : 'https://us-central1-your-project-id.cloudfunctions.net'}/nowPaymentsWebhook`,
+      success_url: 'https://instantnums.com/dashboard/wallet?payment=success',
+      cancel_url: 'https://instantnums.com/dashboard/wallet?payment=cancelled'
+    };
+
+    console.log('NOWPayments API request:', JSON.stringify(requestBody, null, 2));
+
+    // Make API call to NOWPayments
+    const response = await fetch('https://api.nowpayments.io/v1/payment', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'Accept': 'application/json',
+        'User-Agent': 'InstantNums/1.0'
+      },
+      body: JSON.stringify(requestBody)
+    });
+
+    console.log('NOWPayments API response status:', response.status);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('NOWPayments API error:', response.status, errorText);
+      
+      let errorData: any = {};
+      try {
+        errorData = JSON.parse(errorText);
+      } catch (parseError) {
+        errorData = { message: errorText };
+      }
+      
+      throw new HttpsError('internal', `NOWPayments API error: ${response.status} - ${errorData.message || errorText}`);
+    }
+
+    const result: NOWPaymentsCreateResponse = await response.json();
+    console.log('NOWPayments API response:', JSON.stringify(result, null, 2));
+      
+    if (!result.payment_id || !result.pay_address) {
+      console.error('NOWPayments invalid response:', result);
+      throw new HttpsError('internal', 'Invalid response from NOWPayments API');
+    }
+
+    // Store payment data in Firestore
+    const paymentData = {
+      userId: userId,
+      paymentId: result.payment_id,
+      orderId: orderId,
+      amount: amount,
+      currency: currency,
+      payCurrency: result.pay_currency,
+      payAmount: result.pay_amount,
+      payAddress: result.pay_address,
+      status: result.payment_status,
+      userEmail: userEmail,
+      userName: userName,
+      createdAt: FieldValue.serverTimestamp(),
+      provider: 'nowpayments',
+      isActive: true
+    };
+
+    await db.collection('nowpayments_payments').doc(orderId).set(paymentData);
+    
+    console.log('NOWPayments payment created successfully:', orderId);
+
+    return {
+      success: true,
+      payment: {
+        id: orderId,
+        paymentId: result.payment_id,
+        amount: result.pay_amount,
+        currency: result.pay_currency,
+        payAddress: result.pay_address,
+        status: result.payment_status,
+        purchaseId: result.purchase_id
+      }
+    };
+
+  } catch (error) {
+    console.error('Error creating NOWPayments payment:', error);
+    if (error instanceof HttpsError) {
+      throw error;
+    }
+    throw new HttpsError('internal', `Failed to create payment: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 });
 
