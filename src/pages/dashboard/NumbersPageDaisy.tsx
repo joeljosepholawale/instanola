@@ -309,6 +309,13 @@ export function NumbersPage() {
   const fetchPricing = async () => {
     try {
       // Check cache first (cache for 10 minutes)
+      
+      // Create cache key for pricing data
+      const cacheKey = `daisysms_pricing_${JSON.stringify({
+        selectedCountry,
+        selectedService,
+        moreOptions
+      })}`;
       const daisyOptions = DaisySMSService.buildDaisyOptions(moreOptions);
       const cacheTimeKey = 'daisysms_pricing_cache_time';
       const cachedPricing = localStorage.getItem(cacheKey);
