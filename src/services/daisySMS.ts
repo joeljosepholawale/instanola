@@ -588,9 +588,36 @@ export class DaisySMSService {
         api_key: this.apiKey,
         action: 'getNumber',
         service: service,
+        areaCodes: options.areas,
+        carriers: options.carriers,
         country: country || '0'
       };
 
+      // Add DaisySMS options to API call
+      if (options.areas) {
+        params.append('areas', options.areas);
+      }
+      
+      if (options.carriers) {
+        params.append('carriers', options.carriers);
+      }
+      
+      if (options.duration) {
+        params.append('duration', options.duration);
+      }
+      
+      if (options.renewable) {
+        params.append('renewable', options.renewable);
+      }
+      
+      if (options.auto_renew) {
+        params.append('auto_renew', options.auto_renew);
+      }
+      
+      if (options.max_price) {
+        params.append('max_price', options.max_price.toString());
+      }
+      
       if (maxPrice && typeof maxPrice === 'number') params.max_price = maxPrice.toString();
       if (options?.duration) params.duration = options.duration;
       if (options?.areas) params.areas = options.areas;
