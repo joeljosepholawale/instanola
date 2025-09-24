@@ -309,7 +309,7 @@ export function NumbersPage() {
   const fetchPricing = async () => {
     try {
       // Check cache first (cache for 10 minutes)
-      const cacheKey = 'daisysms_pricing_cache';
+      const daisyOptions = DaisySMSService.buildDaisyOptions(moreOptions);
       const cacheTimeKey = 'daisysms_pricing_cache_time';
       const cachedPricing = localStorage.getItem(cacheKey);
       const cacheTime = localStorage.getItem(cacheTimeKey);
@@ -328,14 +328,14 @@ export function NumbersPage() {
       console.log("Fetching fresh pricing data...");
       const daisyService = await DaisySMSService.createWithStoredKey();
       
-      const daisyOptions = buildDaisyOptions();
-      console.log('Renting number with options:', daisyOptions);
+      const optionsForRental = DaisySMSService.buildDaisyOptions(moreOptions);
+      console.log('Renting number with options:', optionsForRental);
       
       const rental = await daisyService.rentNumberWithOptions(
         selectedService, 
         selectedCountry, 
         user.id,
-        daisyOptions
+        optionsForRental
       );
       
       const renewalOptions: any = {};

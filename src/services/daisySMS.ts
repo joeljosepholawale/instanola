@@ -54,7 +54,41 @@ export class DaisySMSService {
     }
   }
 
-
+  // Helper function to build DaisySMS options from user selections
+  static buildDaisyOptions(options: any): string {
+    // Add null check to prevent undefined errors
+    if (!options) {
+      return '';
+    }
+    
+    const params = [];
+    
+    if (options.areas && typeof options.areas === 'string' && options.areas.trim()) {
+      params.push(`areas=${encodeURIComponent(options.areas.trim())}`);
+    }
+    
+    if (options.carriers && typeof options.carriers === 'string' && options.carriers !== 'any') {
+      params.push(`carriers=${encodeURIComponent(options.carriers)}`);
+    }
+    
+    if (options.phone && typeof options.phone === 'string' && options.phone.trim()) {
+      params.push(`phone=${encodeURIComponent(options.phone.trim())}`);
+    }
+    
+    if (options.duration && options.durationType === 'long-term' && typeof options.duration === 'string') {
+      params.push(`duration=${encodeURIComponent(options.duration)}`);
+    }
+    
+    if (options.renewable === true && options.durationType === 'long-term') {
+      params.push('renewable=1');
+    }
+    
+    if (options.autoRenew === true && options.durationType === 'long-term') {
+      params.push('auto_renew=1');
+    }
+    
+    return params.length > 0 ? '&' + params.join('&') : '';
+  }
 
   // Apply markup to entire pricing structure
   private async applyMarkupToPricing(pricingData: any): Promise<any> {
