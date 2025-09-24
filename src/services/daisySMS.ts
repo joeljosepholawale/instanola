@@ -54,41 +54,7 @@ export class DaisySMSService {
     }
   }
 
-  // Helper function to build DaisySMS options from user selections
-  static buildDaisyOptions(options: any): string {
-    // Add null check to prevent undefined errors
-    if (!options) {
-      return '';
-    }
-    
-    const params = [];
-    
-    if (options.areas && typeof options.areas === 'string' && options.areas.trim()) {
-      params.push(`areas=${encodeURIComponent(options.areas.trim())}`);
-    }
-    
-    if (options.carriers && typeof options.carriers === 'string' && options.carriers !== 'any') {
-      params.push(`carriers=${encodeURIComponent(options.carriers)}`);
-    }
-    
-    if (options.phone && typeof options.phone === 'string' && options.phone.trim()) {
-      params.push(`phone=${encodeURIComponent(options.phone.trim())}`);
-    }
-    
-    if (options.duration && options.durationType === 'long-term' && typeof options.duration === 'string') {
-      params.push(`duration=${encodeURIComponent(options.duration)}`);
-    }
-    
-    if (options.renewable === true && options.durationType === 'long-term') {
-      params.push('renewable=1');
-    }
-    
-    if (options.autoRenew === true && options.durationType === 'long-term') {
-      params.push('auto_renew=1');
-    }
-    
-    return params.length > 0 ? '&' + params.join('&') : '';
-  }
+
 
   // Apply markup to entire pricing structure
   private async applyMarkupToPricing(pricingData: any): Promise<any> {
@@ -622,36 +588,9 @@ export class DaisySMSService {
         api_key: this.apiKey,
         action: 'getNumber',
         service: service,
-        areaCodes: options.areas,
-        carriers: options.carriers,
         country: country || '0'
       };
 
-      // Add DaisySMS options to API call
-      if (options.areas) {
-        params.append('areas', options.areas);
-      }
-      
-      if (options.carriers) {
-        params.append('carriers', options.carriers);
-      }
-      
-      if (options.duration) {
-        params.append('duration', options.duration);
-      }
-      
-      if (options.renewable) {
-        params.append('renewable', options.renewable);
-      }
-      
-      if (options.auto_renew) {
-        params.append('auto_renew', options.auto_renew);
-      }
-      
-      if (options.max_price) {
-        params.append('max_price', options.max_price.toString());
-      }
-      
       if (maxPrice && typeof maxPrice === 'number') params.max_price = maxPrice.toString();
       if (options?.duration) params.duration = options.duration;
       if (options?.areas) params.areas = options.areas;
@@ -1507,54 +1446,6 @@ export class DaisySMSService {
   }
 }
 
-// Build DaisySMS API options from user selections
-export function buildDaisyOptions(options: {
-  areas?: string;
-  carriers?: string;
-  phone?: string;
-  duration?: string;
-  renewable?: boolean;
-  autoRenew?: boolean;
-}): { [key: string]: string } {
-  const apiOptions: { [key: string]: string } = {};
-  
-  // Area codes (comma-separated)
-  if (options.areas && options.areas.trim()) {
-    const areaCodes = options.areas.split(',').map(code => code.trim()).filter(code => code);
-    if (areaCodes.length > 0) {
-      apiOptions.areas = areaCodes.join(',');
-    }
-  }
-  
-  // Carriers (single carrier code)
-  if (options.carriers && options.carriers !== 'any') {
-    apiOptions.carriers = options.carriers;
-  }
-  
-  // Phone number
-  if (options.phone && options.phone.trim()) {
-    apiOptions.phone = options.phone.trim();
-  }
-  
-  // Duration for long-term rentals
-  if (options.duration && options.duration !== 'short-term') {
-    apiOptions.duration = options.duration;
-  }
-  
-  // Renewable flag (only for long-term rentals)
-  if (options.duration && options.duration !== 'short-term') {
-    if (options.renewable !== undefined) {
-      apiOptions.renewable = options.renewable ? '1' : '0';
-    }
-    
-    // Auto-renew flag (only for long-term rentals)
-    if (options.autoRenew !== undefined) {
-      apiOptions.auto_renew = options.autoRenew ? '1' : '0';
-    }
-  }
-  
-  return apiOptions;
-}
 // Helper function for currency formatting
 function formatCurrency(amount: number): string {
   return `$${amount.toFixed(2)}`;

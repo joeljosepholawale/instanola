@@ -23,7 +23,7 @@ import { Loader } from "../../components/ui/Loader";
 import { useAuth } from "../../hooks/useAuth";
 import { useStatusPolling } from "../../hooks/useStatusPolling";
 import { useToast } from "../../hooks/useToast";
-import { DaisySMSService, buildDaisyOptions } from "../../services/daisySMS";
+import { DaisySMSService } from "../../services/daisySMS";
 import { formatCurrency, formatDate } from "../../lib/utils";
 import {
   collection,
@@ -45,16 +45,6 @@ export function NumbersPage() {
   const { success, error } = useToast();
 
   // State management
-  const [moreOptions, setMoreOptions] = useState({
-    areaCodes: '',
-    carriers: 'any',
-    duration: '',
-    durationType: 'short-term',
-    durationValue: 1,
-    durationUnit: 'days',
-    renewable: false,
-    autoRenew: false
-  });
   const [loading, setLoading] = useState(true);
   const [rentals, setRentals] = useState<any[]>([]);
   const [selectedCountry, setSelectedCountry] = useState("0"); // USA default
@@ -72,8 +62,6 @@ export function NumbersPage() {
   const [balanceRefreshKey, setBalanceRefreshKey] = useState(0);
   const [timers, setTimers] = useState<{ [key: string]: number }>({});
   const [markupPercentage, setMarkupPercentage] = useState(30);
-  const [optionsPrice, setOptionsPrice] = useState<number | null>(null);
-  const [loadingOptionsPrice, setLoadingOptionsPrice] = useState(false);
   const [exchangeRate, setExchangeRate] = useState(1600);
   const [currentTime, setCurrentTime] = useState(Date.now());
   const [initialTimers, setInitialTimers] = useState<{ [key: string]: number }>(
@@ -309,14 +297,7 @@ export function NumbersPage() {
   const fetchPricing = async () => {
     try {
       // Check cache first (cache for 10 minutes)
-      
-      // Create cache key for pricing data
-      const cacheKey = `daisysms_pricing_${JSON.stringify({
-        selectedCountry,
-        selectedService,
-        moreOptions
-      })}`;
-      const daisyOptions = DaisySMSService.buildDaisyOptions(moreOptions);
+      const cacheKey = 'daisysms_pricing_cache';
       const cacheTimeKey = 'daisysms_pricing_cache_time';
       const cachedPricing = localStorage.getItem(cacheKey);
       const cacheTime = localStorage.getItem(cacheTimeKey);
@@ -335,47 +316,10 @@ export function NumbersPage() {
       console.log("Fetching fresh pricing data...");
       const daisyService = await DaisySMSService.createWithStoredKey();
       
-      const optionsForRental = DaisySMSService.buildDaisyOptions(moreOptions);
-      console.log('Renting number with options:', optionsForRental);
-      
-      const rental = await daisyService.rentNumberWithOptions(
-        selectedService, 
-        selectedCountry, 
-        user.id,
-        optionsForRental
-      );
-      
-      const renewalOptions: any = {};
-      
-      if (rental.areaCodes) {
-        renewalOptions.areas = rental.areaCodes;
-      }
-      
-      if (rental.carriers) {
-        renewalOptions.carriers = rental.carriers;
-      }
-      
-      if (rental.duration) {
-        renewalOptions.duration = rental.duration;
-      }
-      
-      if (rental.renewable !== undefined) {
-        renewalOptions.renewable = rental.renewable ? '1' : '0';
-      }
-      
-      if (rental.autoRenew !== undefined) {
-        renewalOptions.auto_renew = rental.autoRenew ? '1' : '0';
-      }
-      
       // Add timeout to prevent hanging
-      const newRental = await daisyService.rentNumberWithOptions(
-        user.id,
-        renewalOptions
-      );
-      
-      const activeRentals = completedRentals.filter(rental =>
-        rental.status === 'waiting' ||
-        rental.status === 'completed'
+      const pricingPromise = daisyService.getPrices();
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Pricing fetch timeout')), 5000)
       );
       
       const prices = await Promise.race([pricingPromise, timeoutPromise]);
@@ -785,15 +729,10 @@ export function NumbersPage() {
         actualPrice: price,
         daisyPrice: result.daisyPrice || price,
         profit: Math.max(0, price - (result.daisyPrice || price)),
-        daisyPrice: pricing[selectedCountry]?.[selectedService]?.cost || 0,
+        createdAt: new Date(),
         expiresAt: new Date(Date.now() + 30 * 60 * 1000),
-        renewable: moreOptions.renewable,
-        autoRenew: moreOptions.autoRenew,
-        duration: moreOptions.durationType === 'long-term' ? moreOptions.duration : undefined,
-        durationValue: moreOptions.durationType === 'long-term' ? moreOptions.durationValue : undefined,
-        durationUnit: moreOptions.durationType === 'long-term' ? moreOptions.durationUnit : undefined,
-        areaCodes: moreOptions.areaCodes || undefined,
-        carriers: moreOptions.carriers !== 'any' ? moreOptions.carriers : undefined,
+        lastChecked: new Date(),
+        code: null,
         initialStatus: "waiting"
       };
 
@@ -2043,24 +1982,9 @@ export function NumbersPage() {
                     variant="outline"
                     className="flex-1 text-red-600 hover:text-red-800 hover:border-red-300"
                   >
-                    className="bg-green-600 hover:bg-green-700 text-white"
                     <XCircle className="w-4 h-4 mr-2" />
                     Cancel
                   </Button>
-                )}
-                
-                {/* Show completed rentals prominently */}
-                {rental.status === 'completed' && (
-                  <div className="mt-2">
-                    <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full font-medium">
-                      ✓ Completed
-                    </span>
-                    {rental.code && (
-                      <span className="ml-2 font-mono text-sm font-bold text-green-600">
-                        Code: {rental.code}
-                      </span>
-                    )}
-                  </div>
                 )}
               </div>
             </div>
