@@ -216,9 +216,9 @@ export function WalletPage() {
 
   const handlePlisioPaymentSuccess = (amount: number) => {
     setServiceStatus('operational');
-    fetchBalance();
+    // Don't immediately fetch balance - let webhook/status check handle it
     fetchTransactions();
-    success('Payment Successful', `$${amount} has been added to your wallet`);
+    success('Payment Submitted', `$${amount} payment submitted. Your wallet will be credited after confirmation.`);
   };
 
   const handlePlisioPaymentError = (errorMessage: string) => {

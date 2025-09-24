@@ -72,24 +72,32 @@ export function NOWPaymentModal({ isOpen, onClose, onSuccess, onError }: NOWPaym
 
       const numAmount = parseFloat(amount);
       
-      // Update user wallet balance
-      await updateDoc(doc(db, 'users', user.id), {
-        walletBalance: increment(numAmount)
-      });
-
-      // Record transaction
+      // Record transaction as pending - wallet will be credited by webhook/status check
       await setDoc(doc(db, 'transactions', `nowpayments_${paymentData.paymentId}`), {
         userId: user.id,
         type: 'deposit',
         amount: numAmount,
         currency: 'USD',
         description: `NOWPayments crypto payment - ${paymentData.currency}`,
-        status: 'completed',
+        status: 'pending',
         paymentMethod: 'nowpayments_crypto',
         nowPaymentId: paymentData.paymentId,
         cryptoCurrency: paymentData.currency,
         createdAt: new Date(),
         updatedAt: new Date()
+      });
+
+      // Store payment for tracking - don't credit wallet yet
+      await setDoc(doc(db, 'nowpayments_payments', paymentData.paymentId.toString()), {
+        userId: user.id,
+        paymentId: paymentData.paymentId,
+        orderId: paymentData.paymentId.toString(),
+        amount: numAmount,
+        currency: paymentData.currency,
+        status: 'waiting',
+        payAddress: paymentData.payAddress,
+        createdAt: new Date(),
+        walletCredited: false // Track if wallet has been credited
       });
 
       setStep('success');
