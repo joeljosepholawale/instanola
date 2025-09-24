@@ -23,7 +23,7 @@ import { Loader } from "../../components/ui/Loader";
 import { useAuth } from "../../hooks/useAuth";
 import { useStatusPolling } from "../../hooks/useStatusPolling";
 import { useToast } from "../../hooks/useToast";
-import { DaisySMSService } from "../../services/daisySMS";
+import { DaisySMSService, buildDaisyOptions } from "../../services/daisySMS";
 import { formatCurrency, formatDate } from "../../lib/utils";
 import {
   collection,
