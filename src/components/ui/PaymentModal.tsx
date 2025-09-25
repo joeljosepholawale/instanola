@@ -58,7 +58,8 @@ export function PaymentModal({ isOpen, onClose, onSuccess, exchangeRate, directP
     if (!user) return;
     
     try {
-      const account = await PaymentPointService.getExistingAccount(user.id);
+      // Check for account in the current site (instantnums by default)
+      const account = await PaymentPointService.getExistingAccount(user.id, 'instantnums');
       if (account) {
         setHasVirtualAccount(true);
         setVirtualAccount({
@@ -128,7 +129,8 @@ export function PaymentModal({ isOpen, onClose, onSuccess, exchangeRate, directP
         userId: user!.id,
         customerName: profileData.name,
         customerEmail: user!.email,
-        customerPhone: profileData.phone
+        customerPhone: profileData.phone,
+        siteId: 'instantnums' // Specify site for InstantNums
       });
       
       if (result.success && result.account) {

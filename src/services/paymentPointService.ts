@@ -9,6 +9,7 @@ interface PaymentPointVirtualAccountRequest {
   customerName: string;
   customerEmail: string;
   customerPhone?: string;
+  siteId?: string; // Optional for backward compatibility
 }
 
 interface PaymentPointVirtualAccountResponse {
@@ -49,7 +50,8 @@ export class PaymentPointService {
    */
   static async createVirtualAccount(data: PaymentPointVirtualAccountRequest): Promise<PaymentPointVirtualAccountResponse> {
     try {
-      console.log('Creating PaymentPoint virtual account via Firebase Function:', data);
+      const siteId = data.siteId || 'instantnums'; // Default to instantnums for backward compatibility
+      console.log(`Creating PaymentPoint virtual account for ${siteId} via Firebase Function:`, data);
       
       // Check if Firebase Functions are available
       if (!functions) {
@@ -57,14 +59,15 @@ export class PaymentPointService {
       }
 
       // Check for existing account first
-      const existingAccountDoc = await getDoc(doc(db, 'paymentpoint_accounts', data.userId));
+      const collectionName = siteId === 'instantnums' ? 'paymentpoint_accounts' : `paymentpoint_accounts_${siteId}`;
+      const existingAccountDoc = await getDoc(doc(db, collectionName, data.userId));
       if (existingAccountDoc.exists()) {
         const accountData = existingAccountDoc.data() as PaymentPointAccount;
-        console.log('Existing PaymentPoint account found:', accountData.accountNumber);
+        console.log(`Existing PaymentPoint account found for ${siteId}:`, accountData.accountNumber);
         
         return {
           success: true,
-          message: 'Account already exists',
+          message: `Account already exists for ${siteId}`,
           account: {
             accountNumber: accountData.accountNumber,
             accountName: accountData.accountName,
@@ -81,12 +84,17 @@ export class PaymentPointService {
       // Retry up to 3 times for network issues
       for (let attempt = 1; attempt <= 3; attempt++) {
         try {
-          console.log(`PaymentPoint API attempt ${attempt}/3`);
-          result = await this.createVirtualAccountFunction(data);
+          console.log(`PaymentPoint API attempt ${attempt}/3 for ${siteId}`);
+          
+          // Add siteId to the function call
+          result = await this.createVirtualAccountFunction({
+            ...data,
+            siteId: siteId
+          });
           break; // Success, exit retry loop
         } catch (error: any) {
           lastError = error;
-          console.warn(`PaymentPoint attempt ${attempt} failed:`, error.message);
+          console.warn(`PaymentPoint attempt ${attempt} failed for ${siteId}:`, error.message);
           
           // Don't retry for authentication or permission errors
           if (error.code === 'functions/unauthenticated' || 
@@ -110,11 +118,11 @@ export class PaymentPointService {
         throw new Error(result.data.message || 'Failed to create virtual account');
       }
       
-      console.log('PaymentPoint virtual account created successfully:', result.data.account);
+      console.log(`PaymentPoint virtual account created successfully for ${siteId}:`, result.data.account);
       return result.data;
       
     } catch (error) {
-      console.error('Error creating PaymentPoint virtual account:', error);
+      console.error(`Error creating PaymentPoint virtual account for ${siteId}:`, error);
       
       // Handle specific Firebase errors
       if (error instanceof Error) {
@@ -140,19 +148,22 @@ export class PaymentPointService {
   /**
    * Get existing PaymentPoint account for user
    */
-  static async getExistingAccount(userId: string): Promise<PaymentPointAccount | null> {
+  static async getExistingAccount(userId: string, siteId?: string): Promise<PaymentPointAccount | null> {
     try {
-      const accountDoc = await getDoc(doc(db, 'paymentpoint_accounts', userId));
+      const resolvedSiteId = siteId || 'instantnums';
+      const collectionName = resolvedSiteId === 'instantnums' ? 'paymentpoint_accounts' : `paymentpoint_accounts_${resolvedSiteId}`;
+      const accountDoc = await getDoc(doc(db, collectionName, userId));
       if (accountDoc.exists()) {
         const data = accountDoc.data();
         return {
           ...data,
+          siteId: resolvedSiteId,
           createdAt: data.createdAt?.toDate() || new Date()
         } as PaymentPointAccount;
       }
       return null;
     } catch (error) {
-      console.error('Error getting existing PaymentPoint account:', error);
+      console.error(`Error getting existing PaymentPoint account for ${siteId}:`, error);
       return null;
     }
   }
