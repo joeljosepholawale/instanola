@@ -1,11 +1,17 @@
 // Multi-tenant configuration for PaymentPoint functions
+
+// 🔒 SECURITY NOTE: 
+// - Firebase client config (below) is SAFE to expose publicly
+// - PaymentPoint API keys remain secure in Firebase Function secrets
+// - No sensitive data is exposed to client-side code
+
 export interface SiteConfig {
   siteId: string;
   siteName: string;
-  firebaseConfig: {
+  firebaseClientConfig: {
     projectId: string;
     authDomain: string;
-    apiKey: string;
+    apiKey: string; // 🔓 SAFE: Client-side Firebase API key (public by design)
     storageBucket: string;
     messagingSenderId: string;
     appId: string;
@@ -24,10 +30,10 @@ export const SITE_CONFIGS: { [siteId: string]: SiteConfig } = {
   instantnums: {
     siteId: 'instantnums',
     siteName: 'InstantNums',
-    firebaseConfig: {
+    firebaseClientConfig: {
       projectId: 'instantnums-48c6e',
       authDomain: 'instantnums-48c6e.firebaseapp.com',
-      apiKey: 'AIzaSyDjMt3RrBjBqctXZ9UxdriQDfSgFS4HMRE',
+      apiKey: 'AIzaSyDjMt3RrBjBqctXZ9UxdriQDfSgFS4HMRE', // Safe to expose
       storageBucket: 'instantnums-48c6e.firebasestorage.app',
       messagingSenderId: '647968972152',
       appId: '1:647968972152:web:c9a9518c832ecff9aafc8d',
@@ -42,10 +48,10 @@ export const SITE_CONFIGS: { [siteId: string]: SiteConfig } = {
   engrowz: {
     siteId: 'engrowz',
     siteName: 'Engrowz',
-    firebaseConfig: {
+    firebaseClientConfig: {
       projectId: 'engrowz-6db2c',
       authDomain: 'engrowz-6db2c.firebaseapp.com',
-      apiKey: 'AIzaSyCG_Oy84AuMQKRL1YpBPtN2PWqKYuTdUnk',
+      apiKey: 'AIzaSyCG_Oy84AuMQKRL1YpBPtN2PWqKYuTdUnk', // Safe to expose
       storageBucket: 'engrowz-6db2c.firebasestorage.app',
       messagingSenderId: '164077045782',
       appId: '1:164077045782:web:f5ebbc102278b545ad8d37',
